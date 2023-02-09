@@ -104,9 +104,9 @@ sub HOMEMODE_Undef($$)
 
 sub HOMEMODE_Init($$)
 {
-  Debug "HOMEMODE_Init called";
   my ($hash,$resdev) = @_;
   my $name = $hash->{NAME};
+  Log3 $name,4,"HOMEMODE_Init called";
   if (!$resdev)
   {
     my $trans;
@@ -138,7 +138,7 @@ sub HOMEMODE_Init($$)
       return $trans;
     }
   }
-  HOMEMODE_updateInternals($hash,1);
+  HOMEMODE_updateInternals($hash);
   Log3 $name,3,"$name: defined";
 }
 
@@ -756,7 +756,7 @@ sub HOMEMODE_updateInternals($;$$)
     HOMEMODE_GetUpdate($hash);
     return if (!@allMonitoredDevices);
     HOMEMODE_RESIDENTS($hash);
-    HOMEMODE_dynAttrList($hash) if ($force);
+    HOMEMODE_dynAttrList($hash);
     HOMEMODE_TriggerState($hash) if ($hash->{SENSORSCONTACT} || $hash->{SENSORSMOTION});
     HOMEMODE_Luminance($hash) if ($hash->{SENSORSLUMINANCE});
     HOMEMODE_PowerEnergy($hash) if ($hash->{SENSORSENERGY});
@@ -1715,7 +1715,6 @@ sub HOMEMODE_Attr(@)
 {
   my ($cmd,$name,$attr_name,$attr_value) = @_;
   my $hash = $defs{$name};
-  return undef if (!$hash->{'.AttrList'});
   delete $hash->{helper}{lastChangedAttr};
   delete $hash->{helper}{lastChangedAttrValue};
   my $attr_value_old = AttrVal($name,$attr_name,'');
@@ -2145,7 +2144,7 @@ sub HOMEMODE_Attr(@)
     {
       CommandDeleteReading(undef,"$name event-.+") if ($attr_name =~ /^HomeEvents(Holiday|Calendar)Devices$/);
       CommandDeleteReading(undef,"$name battery.*|lastBatteryLow") if ($attr_name eq 'HomeSensorsBattery');
-      HOMEMODE_updateInternals($hash,1);
+      HOMEMODE_updateInternals($hash);
     }
     elsif ($attr_name =~ /^(HomeSensorsContact|HomeSensorsMotion)$/)
     {
@@ -2756,10 +2755,11 @@ sub HOMEMODE_addSensorsuserattr($$;$)
 sub HOMEMODE_set_userattr($$)
 {
   my ($name,$list) = @_;
+  Log3 $name,4,"$name HOMEMODE_set_userattr";
   my $val = AttrVal($name,'userattr','');
   my $l = join ' ',@{$list};
   $l .= $val?" $val":'';
-  CommandAttr(undef,"$name userattr $l");
+  CommandAttr(undef,"$name userattr $l") if ($l && $l ne $val);
   return;
 }
 

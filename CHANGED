@@ -2,13 +2,13 @@ v1.6.0
   - add subsequent optional [NAME] to setter anyOneElseAtHome
   - rework attributes of HOMEMODE, now the attribut 'userattr' is obsolete
   - change attribute name HomeAdvancedUserAttr to HomeAdvancedAttributes
-  - change from scalar() to int()
-  - change verify attribut values only after $init_done
+  - change from scalar() to int() on arrays
   - standardize all greps and splits
   - change greps from regex to eg where possible
-  - remove greps where possible and instead use uniq on arrays
+  - remove greps on arrays where possible and instead use uniq
   - separated module init process to own function
   - remove use POSIX
+  - fix Home attributes being added to sensors multiple times
 v1.5.7
   - add pressureTrend reading when using weather device
   - add hint if weather device is not added to HOMEMODE or not available
