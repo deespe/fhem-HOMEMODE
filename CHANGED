@@ -6,6 +6,9 @@ v1.6.0
   - change verify attribut values only after $init_done
   - standardize all greps and splits
   - change greps from regex to eg where possible
+  - remove greps where possible and instead use uniq on arrays
+  - separated module init process to own function
+  - remove use POSIX
 v1.5.7
   - add pressureTrend reading when using weather device
   - add hint if weather device is not added to HOMEMODE or not available

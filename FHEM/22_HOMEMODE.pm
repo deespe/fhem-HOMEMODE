@@ -11,8 +11,8 @@ package main;
 
 use strict;
 use warnings;
-use POSIX;
 use Time::HiRes qw(gettimeofday);
+use List::Util qw(uniq);
 use HttpUtils;
 use vars qw{%attr %defs %modules $FW_CSRF};
 
@@ -61,8 +61,55 @@ sub HOMEMODE_Define($$)
     return $trans;
   }
   RemoveInternalTimer($hash);
+  $hash->{NOTIFYDEV} = 'global';
+  if ($init_done && !defined $hash->{OLDDEF})
+  {
+    $attr{$name}{devStateIcon}  = 'absent:user_away:dnd+on\n'.
+                                  'gone:user_ext_away:dnd+on\n'.
+                                  'dnd:audio_volume_mute:dnd+off\n'.
+                                  'gotosleep:scene_sleeping:dnd+on\n'.
+                                  'asleep:scene_sleeping_alternat:dnd+on\n'.
+                                  'awoken:weather_sunrise:dnd+on\n'.
+                                  'home:status_available:dnd+on\n'.
+                                  'morning:weather_sunrise:dnd+on\n'.
+                                  'day:weather_sun:dnd+on\n'.
+                                  'afternoon:weather_summer:dnd+on\n'.
+                                  'evening:weather_sunset:dnd+on\n'.
+                                  'night:weather_moon_phases_2:dnd+on';
+    $attr{$name}{icon}          = 'floor';
+    $attr{$name}{room}          = 'HOMEMODE';
+    $attr{$name}{webCmd}        = 'modeAlarm';
+    readingsBeginUpdate($hash);
+    readingsBulkUpdate($hash,'dnd','off') if (!defined ReadingsVal($name,'dnd',undef));
+    readingsBulkUpdate($hash,'anyoneElseAtHome','off') if (!defined ReadingsVal($name,'anyoneElseAtHome',undef));
+    readingsBulkUpdate($hash,'panic','off') if (!defined ReadingsVal($name,'panic',undef));
+    readingsEndUpdate($hash,0);
+  }
+  HOMEMODE_Init($hash,$resdev) if ($init_done);
+  return;
+}
+
+sub HOMEMODE_Undef($$)
+{
+  my ($hash,$arg) = @_;
+  RemoveInternalTimer($hash);
+  my $name = $hash->{NAME};
+  if (devspec2array('TYPE=HOMEMODE') == 1)
+  {
+    HOMEMODE_cleanUserattr($hash,AttrVal($name,'HomeSensorsContact','')) if (AttrVal($name,'HomeSensorsContact',undef));
+    HOMEMODE_cleanUserattr($hash,AttrVal($name,'HomeSensorsMotion','')) if (AttrVal($name,'HomeSensorsMotion',undef));
+  }
+  return;
+}
+
+sub HOMEMODE_Init($$)
+{
+  Debug "HOMEMODE_Init called";
+  my ($hash,$resdev) = @_;
+  my $name = $hash->{NAME};
   if (!$resdev)
   {
+    my $trans;
     my @resdevs;
     for (devspec2array('TYPE=RESIDENTS'))
     {
@@ -91,46 +138,8 @@ sub HOMEMODE_Define($$)
       return $trans;
     }
   }
-  $hash->{NOTIFYDEV} = 'global';
-  if ($init_done && !defined $hash->{OLDDEF})
-  {
-    $attr{$name}{devStateIcon}  = 'absent:user_away:dnd+on\n'.
-                                  'gone:user_ext_away:dnd+on\n'.
-                                  'dnd:audio_volume_mute:dnd+off\n'.
-                                  'gotosleep:scene_sleeping:dnd+on\n'.
-                                  'asleep:scene_sleeping_alternat:dnd+on\n'.
-                                  'awoken:weather_sunrise:dnd+on\n'.
-                                  'home:status_available:dnd+on\n'.
-                                  'morning:weather_sunrise:dnd+on\n'.
-                                  'day:weather_sun:dnd+on\n'.
-                                  'afternoon:weather_summer:dnd+on\n'.
-                                  'evening:weather_sunset:dnd+on\n'.
-                                  'night:weather_moon_phases_2:dnd+on';
-    $attr{$name}{icon}          = 'floor';
-    $attr{$name}{room}          = 'HOMEMODE';
-    $attr{$name}{webCmd}        = 'modeAlarm';
-    readingsBeginUpdate($hash);
-    readingsBulkUpdate($hash,'dnd','off') if (!defined ReadingsVal($name,'dnd',undef));
-    readingsBulkUpdate($hash,'anyoneElseAtHome','off') if (!defined ReadingsVal($name,'anyoneElseAtHome',undef));
-    readingsBulkUpdate($hash,'panic','off') if (!defined ReadingsVal($name,'panic',undef));
-    readingsEndUpdate($hash,0);
-    HOMEMODE_updateInternals($hash,1);
-  }
+  HOMEMODE_updateInternals($hash,1);
   Log3 $name,3,"$name: defined";
-  return;
-}
-
-sub HOMEMODE_Undef($$)
-{
-  my ($hash,$arg) = @_;
-  RemoveInternalTimer($hash);
-  my $name = $hash->{NAME};
-  if (devspec2array('TYPE=HOMEMODE') == 1)
-  {
-    HOMEMODE_cleanUserattr($hash,AttrVal($name,'HomeSensorsContact','')) if (AttrVal($name,'HomeSensorsContact',undef));
-    HOMEMODE_cleanUserattr($hash,AttrVal($name,'HomeSensorsMotion','')) if (AttrVal($name,'HomeSensorsMotion',undef));
-  }
-  return;
 }
 
 sub HOMEMODE_Notify($$)
@@ -149,8 +158,7 @@ sub HOMEMODE_Notify($$)
   {
     if (grep {$_ eq 'INITIALIZED'} @{$events})
     {
-      HOMEMODE_updateInternals($hash);
-      HOMEMODE_dynAttrList($hash);
+      HOMEMODE_Init($hash,$defs{$name}{DEF});
       InternalTimer(gettimeofday() + 30,'HOMEMODE_dynAttrList',$hash);
       push @commands,AttrVal($name,'HomeCMDfhemINITIALIZED','')
         if (AttrVal($name,'HomeCMDfhemINITIALIZED',''));
@@ -564,7 +572,7 @@ sub HOMEMODE_updateInternals($;$$)
         {
           next unless (lc($p) =~ /$short/);
           push @residentspresdevs,$p;
-          push @allMonitoredDevices,$p if (!grep {$_ eq $p} @allMonitoredDevices);
+          push @allMonitoredDevices,$p;
         }
         if (@residentspresdevs)
         {
@@ -604,7 +612,7 @@ sub HOMEMODE_updateInternals($;$$)
       for my $s (devspec2array($contacts))
       {
         push @sensors,$s;
-        push @allMonitoredDevices,$s if (!grep {$_ eq $s} @allMonitoredDevices);
+        push @allMonitoredDevices,$s;
       }
       my $list = join(',',sort @sensors);
       $hash->{SENSORSCONTACT} = $list;
@@ -621,7 +629,7 @@ sub HOMEMODE_updateInternals($;$$)
       for my $s (devspec2array($motion))
       {
         push @sensors,$s;
-        push @allMonitoredDevices,$s if (!grep {$_ eq $s} @allMonitoredDevices);
+        push @allMonitoredDevices,$s;
       }
       my $list = join(',',sort @sensors);
       $hash->{SENSORSMOTION} = $list;
@@ -640,7 +648,7 @@ sub HOMEMODE_updateInternals($;$$)
       {
         next unless (HOMEMODE_ID($s,undef,$p) && HOMEMODE_ID($s,undef,$e));
         push @sensors,$s;
-        push @allMonitoredDevices,$s if (!grep {$_ eq $s} @allMonitoredDevices);
+        push @allMonitoredDevices,$s;
       }
       $hash->{SENSORSENERGY} = join(',',sort @sensors) if (@sensors);
     }
@@ -653,7 +661,7 @@ sub HOMEMODE_updateInternals($;$$)
       {
         next unless (HOMEMODE_ID($s,undef,$r));
         push @sensors,$s;
-        push @allMonitoredDevices,$s if (!grep {$_ eq $s} @allMonitoredDevices);
+        push @allMonitoredDevices,$s;
       }
       $hash->{SENSORSSMOKE} = join(',',sort @sensors) if (@sensors);
     }
@@ -667,7 +675,7 @@ sub HOMEMODE_updateInternals($;$$)
         my $val = ReadingsVal($s,$read,undef);
         next unless (defined $val && $val =~ /^(ok|low|nok|\d{1,3})(%|\s%)?$/);
         push @sensors,$s;
-        push @allMonitoredDevices,$s if (!grep {$_ eq $s} @allMonitoredDevices);
+        push @allMonitoredDevices,$s;
         $hash->{SENSORSBATTERY} = join(',',sort @sensors) if (@sensors);
         if (!grep {$_ eq $s} split /,/,ReadingsVal($name,'batteryLow',''))
         {
@@ -680,15 +688,15 @@ sub HOMEMODE_updateInternals($;$$)
       }
     }
     my $weather = HOMEMODE_AttrCheck($hash,'HomeWeatherDevice');
-    push @allMonitoredDevices,$weather if ($weather && !grep {$_ eq $weather} @allMonitoredDevices);
+    push @allMonitoredDevices,$weather if ($weather);
     my $twilight = HOMEMODE_AttrCheck($hash,'HomeTwilightDevice');
-    push @allMonitoredDevices,$twilight if ($twilight && !grep {$_ eq $twilight} @allMonitoredDevices);
+    push @allMonitoredDevices,$twilight if ($twilight);
     my $temperature = HOMEMODE_AttrCheck($hash,'HomeSensorTemperatureOutside');
-    push @allMonitoredDevices,$temperature if ($temperature && !grep {$_ eq $temperature} @allMonitoredDevices);
+    push @allMonitoredDevices,$temperature if ($temperature);
     my $humidity = HOMEMODE_AttrCheck($hash,'HomeSensorHumidityOutside');
     if ($humidity)
     {
-      push @allMonitoredDevices,$humidity if (!grep {$_ eq $humidity} @allMonitoredDevices);
+      push @allMonitoredDevices,$humidity;
     }
     my @cals;
     CommandDeleteReading(undef,"$name event-.+");
@@ -696,19 +704,20 @@ sub HOMEMODE_updateInternals($;$$)
     {
       for my $c (devspec2array(HOMEMODE_AttrCheck($hash,'HomeEventsHolidayDevices')))
       {
-        push @cals,$c if (!grep {$_ eq $c} @cals);
+        push @cals,$c;
       }
     }
     if (HOMEMODE_AttrCheck($hash,'HomeEventsCalendarDevices'))
     {
       for my $c (devspec2array(HOMEMODE_AttrCheck($hash,'HomeEventsCalendarDevices')))
       {
-        push @cals,$c if (!grep {$_ eq $c} @cals);
+        push @cals,$c;
       }
     }
+    @cals = uniq @cals;
     for my $c (@cals)
     {
-      push @allMonitoredDevices,$c if (!grep {$_ eq $c} @allMonitoredDevices);
+      push @allMonitoredDevices,$c;
       if (HOMEMODE_ID($c,'Calendar'))
       {
         HOMEMODE_EventCommands($hash,$c,'modeStarted',ReadingsVal($c,'modeStarted','none'));
@@ -719,7 +728,7 @@ sub HOMEMODE_updateInternals($;$$)
       }
     }
     my $uwz = HOMEMODE_AttrCheck($hash,'HomeUWZ','');
-    push @allMonitoredDevices,$uwz if ($uwz && !grep {$_ eq $uwz} @allMonitoredDevices);
+    push @allMonitoredDevices,$uwz;
     my $luminance = HOMEMODE_AttrCheck($hash,'HomeSensorsLuminance');
     if ($luminance)
     {
@@ -729,20 +738,20 @@ sub HOMEMODE_updateInternals($;$$)
       {
         next unless (HOMEMODE_ID($s,undef,AttrVal($name,'HomeSensorsLuminanceReading','luminance')));
         push @sensors,$s;
-        push @allMonitoredDevices,$s if (!grep {$_ eq $s} @allMonitoredDevices);
+        push @allMonitoredDevices,$s;
       }
       $hash->{SENSORSLUMINANCE} = join(',',sort @sensors) if (@sensors);
     }
     my $pressure = (split /:/,HOMEMODE_AttrCheck($hash,'HomeSensorAirpressure'))[0];
-    push @allMonitoredDevices,$pressure if ($pressure && !grep {$_ eq $pressure} @allMonitoredDevices);
+    push @allMonitoredDevices,$pressure if ($pressure);
     my $wind = (split /:/,HOMEMODE_AttrCheck($hash,'HomeSensorWindspeed'))[0];
-    push @allMonitoredDevices,$wind if ($wind && !grep {$_ eq $wind} @allMonitoredDevices);
+    push @allMonitoredDevices,$wind if ($wind);
     my $panic = (split /:/,HOMEMODE_AttrCheck($hash,'HomeTriggerPanic'))[0];
-    push @allMonitoredDevices,$panic if ($panic && !grep {$_ eq $panic} @allMonitoredDevices);
+    push @allMonitoredDevices,$panic if ($panic);
     my $aeah = (split /:/,HOMEMODE_AttrCheck($hash,'HomeTriggerAnyoneElseAtHome'))[0];
-    push @allMonitoredDevices,$aeah if ($aeah && !grep {$_ eq $aeah} @allMonitoredDevices);
+    push @allMonitoredDevices,$aeah if ($aeah);
+    @allMonitoredDevices = uniq sort @allMonitoredDevices;
     Log3 $name,5,"$name: new monitored device count: ".@allMonitoredDevices;
-    @allMonitoredDevices = sort @allMonitoredDevices;
     $hash->{NOTIFYDEV} = join(',',@allMonitoredDevices);
     HOMEMODE_GetUpdate($hash);
     return if (!@allMonitoredDevices);
@@ -1060,10 +1069,11 @@ sub HOMEMODE_Set($@)
         {
           for my $item (split(/,/,$aeh))
           {
-            push @arr,$item if (!grep {$_ eq $item} @arr);
+            push @arr,$item;
           }
         }
-        push @arr,$value if (!grep {$_ eq $value} @arr);
+        push @arr,$value;
+        @arr = uniq @arr;
         my $ret = join(',',sort @arr);
         readingsSingleUpdate($hash,'anyoneElseAtHomeBy',$ret,1) if ($ret ne $aeh);
         CommandSet(undef,"$name:FILTER=anyoneElseAtHome!=on anyoneElseAtHome on");
@@ -1074,8 +1084,9 @@ sub HOMEMODE_Set($@)
         for my $item (split /,/,$aeh)
         {
           next unless $item ne $value;
-          push @arr,$item if (!grep {$_ eq $item } @arr);
+          push @arr,$item;
         }
+        @arr = uniq @arr;
         my $ret = int(@arr) ? join(',',sort @arr) : 'none';
         readingsSingleUpdate($hash,'anyoneElseAtHomeBy',$ret,1) if ($ret ne $aeh);
         CommandSet(undef,"$name:FILTER=anyoneElseAtHome!=off anyoneElseAtHome off") if ($ret eq 'none');
@@ -1355,158 +1366,166 @@ sub HOMEMODE_AttrList($)
 {
   my ($hash) = @_;
   my $name = $hash->{NAME};
-  my @attribs = (
-    'disable:1,0',
-    'disabledForIntervals',
-    'HomeAdvancedDetails:none,detail,both,room',
-    'HomeAdvancedAttributes:1,0',
-    'HomeAutoAlarmModes:0,1',
-    'HomeAutoArrival',
-    'HomeAutoAsleep',
-    'HomeAutoAwoken',
-    'HomeAutoDaytime:0,1',
-    'HomeAutoPresence:1,0',
-    'HomeAutoPresenceSuppressState',
-    'HomeCMDalarmSmoke:textField-long',
-    'HomeCMDalarmSmoke-on:textField-long',
-    'HomeCMDalarmSmoke-off:textField-long',
-    'HomeCMDalarmTampered:textField-long',
-    'HomeCMDalarmTampered-off:textField-long',
-    'HomeCMDalarmTampered-on:textField-long',
-    'HomeCMDalarmTriggered:textField-long',
-    'HomeCMDalarmTriggered-off:textField-long',
-    'HomeCMDalarmTriggered-on:textField-long',
-    'HomeCMDanyoneElseAtHome:textField-long',
-    'HomeCMDanyoneElseAtHome-on:textField-long',
-    'HomeCMDanyoneElseAtHome-off:textField-long',
-    'HomeCMDbattery:textField-long',
-    'HomeCMDbatteryLow:textField-long',
-    'HomeCMDbatteryNormal:textField-long',
-    'HomeCMDcontact:textField-long',
-    'HomeCMDcontactClosed:textField-long',
-    'HomeCMDcontactOpen:textField-long',
-    'HomeCMDcontactDoormain:textField-long',
-    'HomeCMDcontactDoormainClosed:textField-long',
-    'HomeCMDcontactDoormainOpen:textField-long',
-    'HomeCMDcontactOpenWarning1:textField-long',
-    'HomeCMDcontactOpenWarning2:textField-long',
-    'HomeCMDcontactOpenWarningLast:textField-long',
-    'HomeCMDdaytime:textField-long',
-    'HomeCMDdeviceDisable:textField-long',
-    'HomeCMDdeviceEnable:textField-long',
-    'HomeCMDdnd:textField-long',
-    'HomeCMDdnd-off:textField-long',
-    'HomeCMDdnd-on:textField-long',
-    'HomeCMDevent:textField-long',
-    'HomeCMDfhemDEFINED:textField-long',
-    'HomeCMDfhemINITIALIZED:textField-long',
-    'HomeCMDfhemSAVE:textField-long',
-    'HomeCMDfhemUPDATE:textField-long',
-    'HomeCMDicewarning:textField-long',
-    'HomeCMDicewarning-on:textField-long',
-    'HomeCMDicewarning-off:textField-long',
-    'HomeCMDlocation:textField-long',
-    'HomeCMDlocation-resident:textField-long',
-    'HomeCMDmode:textField-long',
-    'HomeCMDmode-absent-belated:textField-long',
-    'HomeCMDmotion:textField-long',
-    'HomeCMDmotion-on:textField-long',
-    'HomeCMDmotion-off:textField-long',
-    'HomeCMDpanic:textField-long',
-    'HomeCMDpanic-on:textField-long',
-    'HomeCMDpanic-off:textField-long',
-    'HomeCMDpresence-absent:textField-long',
-    'HomeCMDpresence-present:textField-long',
-    'HomeCMDpresence-absent-device:textField-long',
-    'HomeCMDpresence-present-device:textField-long',
-    'HomeCMDpresence-absent-resident:textField-long',
-    'HomeCMDpresence-present-resident:textField-long',
-    'HomeCMDpublic-ip-change:textField-long',
-    'HomeCMDseason:textField-long',
-    'HomeCMDtwilight:textField-long',
-    'HomeCMDtwilight-sr:textField-long',
-    'HomeCMDtwilight-sr_astro:textField-long',
-    'HomeCMDtwilight-sr_civil:textField-long',
-    'HomeCMDtwilight-sr_indoor:textField-long',
-    'HomeCMDtwilight-sr_naut:textField-long',
-    'HomeCMDtwilight-sr_weather:textField-long',
-    'HomeCMDtwilight-ss:textField-long',
-    'HomeCMDtwilight-ss_astro:textField-long',
-    'HomeCMDtwilight-ss_civil:textField-long',
-    'HomeCMDtwilight-ss_indoor:textField-long',
-    'HomeCMDtwilight-ss_naut:textField-long',
-    'HomeCMDtwilight-ss_weather:textField-long',
-    'HomeCMDuwz-warn:textField-long',
-    'HomeCMDuwz-warn-begin:textField-long',
-    'HomeCMDuwz-warn-end:textField-long',
-    'HomeDaytimes:textField-long',
-    'HomeEventsCalendarDevices',
-    'HomeEventsHolidayDevices',
-    'HomeIcewarningOnOffTemps',
-    'HomeLanguage:DE,EN',
-    'HomeModeAlarmArmDelay',
-    'HomeModeAbsentBelatedTime',
-    'HomeAtTmpRoom',
-    'HomePresenceDeviceType',
-    'HomePublicIpCheckInterval',
-    'HomeResidentCmdDelay',
-    'HomeSeasons:textField-long',
-    'HomeSensorAirpressure',
-    'HomeSensorHumidityOutside',
-    'HomeSensorTemperatureOutside',
-    'HomeSensorWindspeed',
-    'HomeSensorsBattery',
-    'HomeSensorsBatteryLowPercentage',
-    'HomeSensorsBatteryReading',
-    'HomeSensorsContact',
-    'HomeSensorsContactReadings',
-    'HomeSensorsContactValues',
-    'HomeSensorsContactOpenTimeDividers',
-    'HomeSensorsContactOpenTimeMin',
-    'HomeSensorsContactOpenTimes',
-    'HomeSensorsLuminance',
-    'HomeSensorsLuminanceReading',
-    'HomeSensorsMotion',
-    'HomeSensorsMotionReadings',
-    'HomeSensorsMotionValues',
-    'HomeSensorsPowerEnergy',
-    'HomeSensorsPowerEnergyReadings',
-    'HomeSensorsSmoke',
-    'HomeSensorsSmokeReading',
-    'HomeSensorsSmokeValue',
-    'HomeSpecialLocations',
-    'HomeSpecialModes',
-    'HomeTextAndAreIs',
-    'HomeTextClosedOpen',
-    'HomeTextNosmokeSmoke',
-    'HomeTextRisingConstantFalling',
-    'HomeTextTodayTomorrowAfterTomorrow',
-    'HomeTextWeatherForecastToday:textField-long',
-    'HomeTextWeatherForecastTomorrow:textField-long',
-    'HomeTextWeatherForecastInSpecDays:textField-long',
-    'HomeTextWeatherNoForecast:textField-long',
-    'HomeTextWeatherLong:textField-long',
-    'HomeTextWeatherShort:textField-long',
-    'HomeTrendCalcAge:900,1800,2700,3600',
-    'HomeTriggerAnyoneElseAtHome',
-    'HomeTriggerPanic',
-    'HomeTwilightDevice',
-    'HomeUWZ',
-    'HomeWeatherDevice'
-  );
-  for (split /,/,$HOMEMODE_Locations)
+  my @attribs;
+  if (!$init_done)
   {
-    push @attribs,"HomeCMDlocation-$_:textField-long";
+    @attribs = ( 'disable:1,0', 'disabledForIntervals','Home.*' );
   }
-  for (split /,/,$HOMEMODE_UserModesAll)
+  else
   {
-    push @attribs,"HomeCMDmode-$_:textField-long";
-    push @attribs,"HomeCMDmode-$_-resident:textField-long";
-  }
-  push @attribs,'HomeCMDmodeAlarm:textField-long';
-  for (split /,/,$HOMEMODE_AlarmModes)
-  {
-    push @attribs,"HomeCMDmodeAlarm-$_:textField-long";
+    @attribs = (
+      'disable:1,0',
+      'disabledForIntervals:textField',
+      'HomeAdvancedDetails:none,detail,both,room',
+      'HomeAdvancedAttributes:1,0',
+      'HomeAutoAlarmModes:0,1',
+      'HomeAutoArrival:textField',
+      'HomeAutoAsleep:textField',
+      'HomeAutoAwoken:textField',
+      'HomeAutoDaytime:0,1',
+      'HomeAutoPresence:1,0',
+      'HomeAutoPresenceSuppressState:textField',
+      'HomeCMDalarmSmoke',
+      'HomeCMDalarmSmoke-on',
+      'HomeCMDalarmSmoke-off',
+      'HomeCMDalarmTampered',
+      'HomeCMDalarmTampered-off',
+      'HomeCMDalarmTampered-on',
+      'HomeCMDalarmTriggered',
+      'HomeCMDalarmTriggered-off',
+      'HomeCMDalarmTriggered-on',
+      'HomeCMDanyoneElseAtHome',
+      'HomeCMDanyoneElseAtHome-on',
+      'HomeCMDanyoneElseAtHome-off',
+      'HomeCMDbattery',
+      'HomeCMDbatteryLow',
+      'HomeCMDbatteryNormal',
+      'HomeCMDcontact',
+      'HomeCMDcontactClosed',
+      'HomeCMDcontactOpen',
+      'HomeCMDcontactDoormain',
+      'HomeCMDcontactDoormainClosed',
+      'HomeCMDcontactDoormainOpen',
+      'HomeCMDcontactOpenWarning1',
+      'HomeCMDcontactOpenWarning2',
+      'HomeCMDcontactOpenWarningLast',
+      'HomeCMDdaytime',
+      'HomeCMDdeviceDisable',
+      'HomeCMDdeviceEnable',
+      'HomeCMDdnd',
+      'HomeCMDdnd-off',
+      'HomeCMDdnd-on',
+      'HomeCMDevent',
+      'HomeCMDfhemDEFINED',
+      'HomeCMDfhemINITIALIZED',
+      'HomeCMDfhemSAVE',
+      'HomeCMDfhemUPDATE',
+      'HomeCMDicewarning',
+      'HomeCMDicewarning-on',
+      'HomeCMDicewarning-off',
+      'HomeCMDlocation',
+      'HomeCMDlocation-resident',
+      'HomeCMDmode',
+      'HomeCMDmode-absent-belated',
+      'HomeCMDmotion',
+      'HomeCMDmotion-on',
+      'HomeCMDmotion-off',
+      'HomeCMDpanic',
+      'HomeCMDpanic-on',
+      'HomeCMDpanic-off',
+      'HomeCMDpresence-absent',
+      'HomeCMDpresence-present',
+      'HomeCMDpresence-absent-device',
+      'HomeCMDpresence-present-device',
+      'HomeCMDpresence-absent-resident',
+      'HomeCMDpresence-present-resident',
+      'HomeCMDpublic-ip-change',
+      'HomeCMDseason',
+      'HomeCMDtwilight',
+      'HomeCMDtwilight-sr',
+      'HomeCMDtwilight-sr_astro',
+      'HomeCMDtwilight-sr_civil',
+      'HomeCMDtwilight-sr_indoor',
+      'HomeCMDtwilight-sr_naut',
+      'HomeCMDtwilight-sr_weather',
+      'HomeCMDtwilight-ss',
+      'HomeCMDtwilight-ss_astro',
+      'HomeCMDtwilight-ss_civil',
+      'HomeCMDtwilight-ss_indoor',
+      'HomeCMDtwilight-ss_naut',
+      'HomeCMDtwilight-ss_weather',
+      'HomeCMDuwz-warn',
+      'HomeCMDuwz-warn-begin',
+      'HomeCMDuwz-warn-end',
+      'HomeDaytimes',
+      'HomeEventsCalendarDevices:textField',
+      'HomeEventsHolidayDevices:textField',
+      'HomeIcewarningOnOffTemps:textField',
+      'HomeLanguage:DE,EN',
+      'HomeModeAlarmArmDelay:textField',
+      'HomeModeAbsentBelatedTime:textField',
+      'HomeAtTmpRoom:textField',
+      'HomePresenceDeviceType:textField',
+      'HomePublicIpCheckInterval:textField',
+      'HomeResidentCmdDelay:textField',
+      'HomeSeasons',
+      'HomeSensorAirpressure:textField',
+      'HomeSensorHumidityOutside',
+      'HomeSensorTemperatureOutside',
+      'HomeSensorWindspeed:textField',
+      'HomeSensorsBattery:textField',
+      'HomeSensorsBatteryLowPercentage',
+      'HomeSensorsBatteryReading',
+      'HomeSensorsContact:textField',
+      'HomeSensorsContactReadings:textField',
+      'HomeSensorsContactValues:textField',
+      'HomeSensorsContactOpenTimeDividers:textField',
+      'HomeSensorsContactOpenTimeMin:textField',
+      'HomeSensorsContactOpenTimes:textField',
+      'HomeSensorsLuminance:textField',
+      'HomeSensorsLuminanceReading:textField',
+      'HomeSensorsMotion:textField',
+      'HomeSensorsMotionReadings:textField',
+      'HomeSensorsMotionValues:textField',
+      'HomeSensorsPowerEnergy:textField',
+      'HomeSensorsPowerEnergyReadings:textField',
+      'HomeSensorsSmoke:textField',
+      'HomeSensorsSmokeReading:textField',
+      'HomeSensorsSmokeValue:textField',
+      'HomeSpecialLocations:textField',
+      'HomeSpecialModes:textField',
+      'HomeTextAndAreIs:textField',
+      'HomeTextClosedOpen:textField',
+      'HomeTextNosmokeSmoke:textField',
+      'HomeTextRisingConstantFalling:textField',
+      'HomeTextTodayTomorrowAfterTomorrow:textField',
+      'HomeTextWeatherForecastToday',
+      'HomeTextWeatherForecastTomorrow',
+      'HomeTextWeatherForecastInSpecDays',
+      'HomeTextWeatherNoForecast',
+      'HomeTextWeatherLong',
+      'HomeTextWeatherShort',
+      'HomeTrendCalcAge:900,1800,2700,3600',
+      'HomeTriggerAnyoneElseAtHome:textField',
+      'HomeTriggerPanic:textField',
+      'HomeTwilightDevice:textField',
+      'HomeUWZ:textField',
+      'HomeWeatherDevice:textField'
+    );
+    for (split /,/,$HOMEMODE_Locations)
+    {
+      push @attribs,"HomeCMDlocation-$_";
+    }
+    for (split /,/,$HOMEMODE_UserModesAll)
+    {
+      push @attribs,"HomeCMDmode-$_";
+      push @attribs,"HomeCMDmode-$_-resident";
+    }
+    push @attribs,'HomeCMDmodeAlarm';
+    for (split /,/,$HOMEMODE_AlarmModes)
+    {
+      push @attribs,"HomeCMDmodeAlarm-$_";
+    }
   }
   return join(' ',@attribs);
 }
@@ -1578,7 +1597,7 @@ sub HOMEMODE_dynAttrList($)
       {
         my $loc = makeReadingName($_);
         push @dynAttrList,'HomeCMDlocation-'.$loc.'-'.$resident;
-        push @dynAttrList,'HomeCMDlocation-'.$loc.'-resident' if (!grep {$_ eq "HomeCMDlocation-$loc-resident"} @dynAttrList);
+        push @dynAttrList,'HomeCMDlocation-'.$loc.'-resident';
       }
     }
     my @presdevs = @{$hash->{helper}{presdevs}{$resident}} if ($hash->{helper}{presdevs}{$resident});
@@ -1611,22 +1630,23 @@ sub HOMEMODE_dynAttrList($)
     my $text = makeReadingName((split /\|/)[1]);
     my $d = "HomeCMDdaytime-$text";
     my $m = "HomeCMDmode-$text";
-    push @dynAttrList,$d if (!grep {$_ eq $d} @dynAttrList);
-    push @dynAttrList,$m if (!grep {$_ eq $m} @dynAttrList);
+    push @dynAttrList,$d;
+    push @dynAttrList,$m;
   }
   for (split ' ',HOMEMODE_AttrCheck($hash,'HomeSeasons',$HOMEMODE_Seasons))
   {
     my $text = (split /\|/)[1];
     my $s = 'HomeCMDseason-'.makeReadingName($text);
-    push @dynAttrList,$s if (!grep {$_ eq $s} @dynAttrList);
+    push @dynAttrList,$s;
   }
   my @list;
   for my $attrib (@dynAttrList)
   {
     $attrib = $attrib =~ /^.+:.+$/ ? $attrib : "$attrib:textField-long";
-    push @list,$attrib if (!grep {$_ eq $attrib} @list);
+    push @list,$attrib;
   }
-  $hash->{'.AttrList'} = join ' ',sort @list;
+  @list = uniq sort @list;
+  $hash->{'.AttrList'} = join ' ',@list;
   #######################
   # for compatibiliy reasons: clean & delete userattr if possible
   my $ua = AttrVal($name,'userattr',undef);
@@ -1635,6 +1655,7 @@ sub HOMEMODE_dynAttrList($)
     my @stayattr;
     for (split ' ',$ua)
     {
+      # cleaning
       if ($_ !~ /^Home/)
       {
         push @stayattr,$_;
@@ -1663,27 +1684,28 @@ sub HOMEMODE_cleanUserattr($$;$)
   for my $dev (@devspec)
   {
     my $userattr = AttrVal($dev,'userattr','');
-    if ($userattr)
+    next if (!$userattr);
+    Debug "HOMEMODE_cleanUserattr $dev $userattr";
+    my @stayattr;
+    for my $attr (split ' ',$userattr)
     {
-      my @stayattr;
-      for my $attr (split ' ',$userattr)
+      if ($attr =~ /^Home/)
       {
-        if ($attr =~ /^Home/)
-        {
-          $attr =~ s/:.*//;
-          CommandDeleteAttr(undef,"$dev $attr") if ((AttrVal($dev,$attr,'') && !@newdevspec) || (AttrVal($dev,$attr,'') && @newdevspec && !grep {$attr eq $dev} @newdevspec));
-          next;
-        }
-        push @stayattr,$attr if (!grep {$_ eq $attr} @stayattr);
+        $attr =~ s/:.*$//;
+        Debug "HOMEMODE_cleanUserattr attr $attr";
+        CommandDeleteAttr(undef,"$dev $attr") if ((AttrVal($dev,$attr,'') && !@newdevspec) || (AttrVal($dev,$attr,'') && @newdevspec && !grep {$_ eq $dev} @newdevspec));
+        next;
       }
-      if (@stayattr)
-      {
-        CommandAttr(undef,"$dev userattr ".join(' ',@stayattr));
-      }
-      else
-      {
-        CommandDeleteAttr(undef,"$dev userattr");
-      }
+      push @stayattr,$attr;
+    }
+    if (@stayattr)
+    {
+      @stayattr = uniq sort @stayattr;
+      CommandAttr(undef,"$dev userattr ".join(' ',@stayattr));
+    }
+    else
+    {
+      CommandDeleteAttr(undef,"$dev userattr");
     }
   }
   return;
@@ -2296,16 +2318,17 @@ sub HOMEMODE_replacePlaceholders($$;$)
     {
       for my $c (devspec2array(AttrVal($name,'HomeEventsHolidayDevices','')))
       {
-        push @cals,$c if (!grep {$_ eq $c} @cals);
+        push @cals,$c;
       }
     }
     else
     {
       for my $c (devspec2array(AttrVal($name,'HomeEventsCalendarDevices','')))
       {
-        push @cals,$c if (!grep {$_ eq $c} @cals);
+        push @cals,$c;
       }
     }
+    @cals = uniq @cals;
     for my $cal (@cals)
     {
       my $state = ReadingsVal($name,"event-$cal",'none') ne 'none' ? ReadingsVal($name,"event-$cal",'') : '';
@@ -2681,11 +2704,11 @@ sub HOMEMODE_hourMaker($)
 sub HOMEMODE_addSensorsuserattr($$;$)
 {
   my ($hash,$devs,$olddevs) = @_;
-  return if (!$devs);
+  return if (!$devs || !$init_done);
   my $name = $hash->{NAME};
   my @devspec = devspec2array($devs);
   my @olddevspec = devspec2array($olddevs) if ($olddevs);
-  HOMEMODE_cleanUserattr($hash,$olddevs,$devs) if (@olddevspec);
+  HOMEMODE_cleanUserattr($hash,$olddevs,$devs) if ($olddevs);
   for my $sensor (@devspec)
   {
     my $inolddevspec = @olddevspec && grep {$_ eq $sensor} @olddevspec ? 1 : 0;
@@ -2702,6 +2725,7 @@ sub HOMEMODE_addSensorsuserattr($$;$)
       push @list,'HomeOpenDontTriggerModesResidents';
       push @list,'HomeOpenTimeDividers';
       push @list,'HomeOpenTimes';
+      @list = uniq sort @list;
       HOMEMODE_set_userattr($sensor,\@list);
       if (!$inolddevspec)
       {
@@ -2715,6 +2739,7 @@ sub HOMEMODE_addSensorsuserattr($$;$)
     if ($hash->{SENSORSMOTION} && grep {$_ eq $sensor} split /,/,$hash->{SENSORSMOTION})
     {
       push @list,'HomeSensorLocation:inside,outside';
+      @list = uniq sort @list;
       HOMEMODE_set_userattr($sensor,\@list);
       if (!$inolddevspec)
       {
@@ -3194,7 +3219,7 @@ sub HOMEMODE_EventCommands($$$$)
       $sum =~ s/[\s ]+/-/g;
       if ($read eq 'start')
       {
-        push @prevevents,$summary if (!grep {$_ eq $summary} @prevevents);
+        push @prevevents,$summary;
         push @cmds,AttrVal($name,"HomeCMDevent-$cal-".makeReadingName($sum).'-begin','') if (AttrVal($name,"HomeCMDevent-$cal-".makeReadingName($sum).'-begin',undef));
       }
       elsif ($read eq 'end')
@@ -3212,7 +3237,7 @@ sub HOMEMODE_EventCommands($$$$)
       }
       elsif ($read eq 'modeStarted')
       {
-        push @prevevents,$summary if (!grep {$_ eq $summary} @prevevents);
+        push @prevevents,$summary;
       }
       for (@cmds)
       {
@@ -3231,8 +3256,12 @@ sub HOMEMODE_EventCommands($$$$)
       }
     }
     my $update = 'none';
-    $update = join ',',@prevevents if (@prevevents);
+    if (@prevevents)
+    {
+      @prevevents = uniq sort @prevevents;
+      $update = join ',',@prevevents;
     readingsSingleUpdate($hash,"event-$cal",$update,1);
+    }
   }
   for (@cmds)
   {
@@ -3478,7 +3507,7 @@ sub HOMEMODE_CalendarEvents($$)
         shift @parts;
       }
       my $evt = join('-',@parts);
-      push @events,$evt if (!grep {$_ eq $evt} @events);
+      push @events,$evt;
     }
   }
   else
@@ -3490,10 +3519,10 @@ sub HOMEMODE_CalendarEvents($$)
       my $evt = $_->{summary};
       Log3 $name,5,"Calendar_GetEvents event: $evt";
       $evt =~ s/[,;:\?\!\|\\\/\^\$\s ]/-/g;
-      # $evt =~ s/[\s ]+/-/g;
-      push @events,$evt if (!grep {$_ eq $evt} @events);
+      push @events,$evt;
     }
   }
+  @events = uniq @events;
   return \@events;
 }
 
