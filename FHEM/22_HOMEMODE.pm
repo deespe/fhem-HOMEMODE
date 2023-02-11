@@ -192,7 +192,7 @@ sub HOMEMODE_Notify($$)
     }
     elsif (grep {/^REREADCFG|MODIFIED\s$name$/x} @{$events})
     {
-      HOMEMODE_updateInternals($hash,1);
+      HOMEMODE_updateInternals($hash,1,1);
     }
   }
   else
@@ -1764,7 +1764,7 @@ sub HOMEMODE_Attr(@)
       return $trans if ($attr_value !~ /^[01]$/);
       RemoveInternalTimer($hash) if ($attr_name eq 'disable' && $attr_value == 1);
       HOMEMODE_GetUpdate($hash) if ($attr_name eq 'disable' && !$attr_value);
-      HOMEMODE_updateInternals($hash,1) if ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence)$/ && $init_done);
+      HOMEMODE_updateInternals($hash) if ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence)$/ && $init_done);
     }
     elsif ($attr_name =~ /^HomeCMD/ && $init_done)
     {
@@ -1798,7 +1798,7 @@ sub HOMEMODE_Attr(@)
       }
       else
       {
-        HOMEMODE_updateInternals($hash,1);
+        HOMEMODE_updateInternals($hash);
       }
     }
     elsif ($attr_name =~ /^(HomePresenceDeviceType)$/ && $init_done)
@@ -1807,7 +1807,7 @@ sub HOMEMODE_Attr(@)
         "$attr_value muss ein gültiger TYPE sein":
         "$attr_value must be a valid TYPE";
       return $trans if (!HOMEMODE_CheckIfIsValidDevspec("TYPE=$attr_value",'presence'));
-      HOMEMODE_updateInternals($hash,1);
+      HOMEMODE_updateInternals($hash);
     }
     elsif ($attr_name =~ /^(HomeSensorsContactReadings|HomeSensorsMotionReadings)$/)
     {
