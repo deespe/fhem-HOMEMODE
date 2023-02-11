@@ -907,7 +907,7 @@ sub HOMEMODE_Set($@)
   $para .= ' modeAlarm:'.$HOMEMODE_AlarmModes;
   $para .= ' modeAlarm-for-minutes';
   $para .= ' panic:on,off';
-  $para .= ' location:'.join(',', sort @locations);
+  $para .= ' location:'.join(',', uniq sort @locations);
   $para .= ' updateInternalsForce:noArg';
   $para .= ' updateHomebridgeMapping:noArg';
   return "$cmd is not a valid command for $name, please choose one of $para" if (!$cmd || $cmd eq '?');
@@ -922,7 +922,7 @@ sub HOMEMODE_Set($@)
     {
       push @commands,AttrVal($name,'HomeCMDpresence-present','') if (AttrVal($name,'HomeCMDpresence-present',undef) && $mode =~ /^(absent|gone)$/);
       $present = 'present';
-      $location = grep {$_ eq $plocation} split /,/,$slocations ? $plocation : 'home';
+      $location = (grep {/^$plocation$/x} split /,/,$slocations) ? $plocation : 'home';
       if ($presence eq 'absent')
       {
         if (AttrNum($name,'HomeAutoArrival',0))
@@ -1006,6 +1006,7 @@ sub HOMEMODE_Set($@)
   }
   elsif ($cmd eq 'location')
   {
+    Log3 $name,4,"$name: HOMEMODE_Set location: $option";
     push @commands,AttrVal($name,'HomeCMDlocation','') if (AttrVal($name,'HomeCMDlocation',undef));
     push @commands,AttrVal($name,'HomeCMDlocation-'.makeReadingName($option),'') if (AttrVal($name,'HomeCMDlocation-'.makeReadingName($option),undef));
     readingsBeginUpdate($hash);
@@ -1249,11 +1250,11 @@ sub HOMEMODE_RESIDENTS($;$)
   my $emp = ReplaceEventMap($dev,'present',1);
   if (grep {/^state:\s/x} @{$events})
   {
-    for (@{$events})
+    for my $evt (@{$events})
     {
-      next unless ($_ =~ /^state:\s(.+)$/ && grep {$_ eq $1} split /,/,$HOMEMODE_UserModesAll);
+      next unless ($evt =~ /^state:\s(.+)$/ && grep {$_ eq $1} split /,/,$HOMEMODE_UserModesAll);
       $mode = $1;
-      Log3 $name,5,"$name: HOMEMODE_RESIDENTS mode: $mode";
+      Log3 $name,4,"$name: HOMEMODE_RESIDENTS mode: $mode";
       last;
     }
   }
@@ -1270,11 +1271,11 @@ sub HOMEMODE_RESIDENTS($;$)
     readingsBulkUpdate($hash,'prevActivityByResident',$lad);
     readingsEndUpdate($hash,1);
     my @commands;
-    if (grep {/^wayhome:\s1$/x} @{$events})
+    if (grep {$_ eq 'wayhome: 1'} @{$events})
     {
       CommandSet(undef,"$name:FILTER=location!=wayhome location wayhome") if (ReadingsVal($name,'state','') =~ /^absent|gone$/);
     }
-    elsif (grep {$_ eq "wayhome: 0"} @{$events})
+    elsif (grep {$_ eq 'wayhome: 0'} @{$events})
     {
       my $rx = $hash->{RESIDENTS};
       $rx =~ s/,/|/g;
@@ -1299,13 +1300,14 @@ sub HOMEMODE_RESIDENTS($;$)
       my $loc;
       for (@{$events})
       {
+        Log3 $name,4,"$name: HOMEMODE_RESIDENTS dev: $dev - event: $_";
         next unless ($_ =~ /^location:\s(.+)$/);
         $loc = $1;
         last;
       }
       if ($loc)
       {
-        Log3 $name,5,"$name: HOMEMODE_RESIDENTS dev: $dev - location: $loc";
+        Log3 $name,4,"$name: HOMEMODE_RESIDENTS dev: $dev - location: $loc";
         readingsSingleUpdate($hash,'lastLocationByResident',"$dev - $loc",1);
         push @commands,AttrVal($name,'HomeCMDlocation-resident','') if (AttrVal($name,'HomeCMDlocation-resident',undef));
         push @commands,AttrVal($name,'HomeCMDlocation-'.makeReadingName($loc).'-resident','') if (AttrVal($name,'HomeCMDlocation-'.makeReadingName($loc).'-resident',undef));
@@ -1685,14 +1687,12 @@ sub HOMEMODE_cleanUserattr($$;$)
   {
     my $userattr = AttrVal($dev,'userattr','');
     next if (!$userattr);
-    Debug "HOMEMODE_cleanUserattr $dev $userattr";
     my @stayattr;
     for my $attr (split ' ',$userattr)
     {
       if ($attr =~ /^Home/)
       {
         $attr =~ s/:.*$//;
-        Debug "HOMEMODE_cleanUserattr attr $attr";
         CommandDeleteAttr(undef,"$dev $attr") if ((AttrVal($dev,$attr,'') && !@newdevspec) || (AttrVal($dev,$attr,'') && @newdevspec && !grep {$_ eq $dev} @newdevspec));
         next;
       }
@@ -1719,10 +1719,10 @@ sub HOMEMODE_Attr(@)
   delete $hash->{helper}{lastChangedAttrValue};
   my $attr_value_old = AttrVal($name,$attr_name,'');
   $hash->{helper}{lastChangedAttr} = $attr_name;
-  $hash->{helper}{lastChangedAttrValue} = $attr_value?$attr_value:'';
   my $trans;
   if ($cmd eq 'set')
   {
+    $hash->{helper}{lastChangedAttrValue} = $attr_value;
     if ($attr_name =~ /^(HomeAutoAwoken|HomeAutoAsleep|HomeAutoArrival|HomeModeAbsentBelatedTime)$/)
     {
       $trans = $HOMEMODE_de?
@@ -2643,6 +2643,7 @@ sub HOMEMODE_SetDaytime($)
   my $dtr = makeReadingName($dt);
   if (ReadingsVal($name,'daytime','') ne $dt)
   {
+    Log3 $name,4,"$name HOMEMODE_SetDaytime daytime: $dt";
     my @commands;
     push @commands,AttrVal($name,'HomeCMDdaytime','') if (AttrVal($name,'HomeCMDdaytime',undef));
     push @commands,AttrVal($name,"HomeCMDdaytime-$dtr",'') if (AttrVal($name,"HomeCMDdaytime-$dtr",undef));
@@ -2710,7 +2711,7 @@ sub HOMEMODE_addSensorsuserattr($$;$)
   HOMEMODE_cleanUserattr($hash,$olddevs,$devs) if ($olddevs);
   for my $sensor (@devspec)
   {
-    my $inolddevspec = @olddevspec && grep {$_ eq $sensor} @olddevspec ? 1 : 0;
+    my $inolddevspec = @olddevspec && (grep {$_ eq $sensor} @olddevspec) ? 1 : 0;
     my $alias = AttrVal($sensor,'alias','');
     my @list;
     push @list,'HomeModeAlarmActive';
