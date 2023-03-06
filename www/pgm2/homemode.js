@@ -49,7 +49,7 @@ function FW_HomeModeReadyFn() {
   if (lastInfo){
     $('#HOMEMODE_infopanel').html('').css('width',0);
     $('#HOMEMODE_infopanelh').text($('#HOMEMODE').find('[informid='+maindev+'-'+lastInfo+']').first().attr('header'));
-    $('#HOMEMODE_infopanel').html($('#HOMEMODE').find('[informid='+maindev+'-'+lastInfo+']').first().html()).css('width',$('#HOMEMODE').width());
+    $('#HOMEMODE_infopanel').html($('#HOMEMODE').find('[informid='+maindev+'-'+lastInfo+']').first().html()).attr('informid',maindev+'-'+lastInfo).css('width',$('#HOMEMODE').width());
   }
   $(".HOMEMODE_i").unbind().click(function() {
     var t  = $(this).find(".HOMEMODE_info").text();

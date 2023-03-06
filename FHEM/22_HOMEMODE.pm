@@ -585,6 +585,7 @@ sub Notify
           readingsSingleUpdate($hash,'humidity',$humi,1);
           ReadingTrend($hash,'humidity',$humi);
         }
+        Weather($hash,AttrVal($name,'HomeWeatherDevice','')) if (AttrVal($name,'HomeWeatherDevice',''));
       }
       if (AttrVal($name,'HomeSensorHumidityOutside',undef) && $devname eq AttrVal($name,'HomeSensorHumidityOutside','') && grep {/^humidity:\s/} @{$events})
       {
@@ -594,6 +595,7 @@ sub Notify
           my $val = (split ' ',$1)[0];
           readingsSingleUpdate($hash,'humidity',$val,1);
           ReadingTrend($hash,'humidity',$val);
+          Weather($hash,AttrVal($name,'HomeWeatherDevice','')) if (AttrVal($name,'HomeWeatherDevice',''));
           last;
         }
       }
@@ -608,6 +610,7 @@ sub Notify
             my $val = (split ' ',$1)[0];
             readingsSingleUpdate($hash,'wind',$val,1);
             ReadingTrend($hash,'wind',$val);
+            Weather($hash,AttrVal($name,'HomeWeatherDevice','')) if (AttrVal($name,'HomeWeatherDevice',''));
             last;
           }
         }
@@ -623,6 +626,7 @@ sub Notify
             my $val = (split ' ',$1)[0];
             readingsSingleUpdate($hash,'pressure',$val,1);
             ReadingTrend($hash,'pressure',$val);
+            Weather($hash,AttrVal($name,'HomeWeatherDevice','')) if (AttrVal($name,'HomeWeatherDevice',''));
             last;
           }
         }
@@ -2129,6 +2133,7 @@ sub Attr
       RemoveInternalTimer($hash) if ($attr_name eq 'disable' && $attr_value);
       GetUpdate($hash) if ($attr_name eq 'disable' && !$attr_value);
       updateInternals($hash) if ($attr_name =~ /^Home(AdvancedAttributes|AutoPresence)$/x && $init_done);
+      addSensorsUserAttr($hash,$hash->{SENSORSCONTACT},$hash->{SENSORSCONTACT}) if ($attr_name eq 'HomeSensorsContactOpenWarningUnified' && $init_done);
     }
     elsif ($attr_name =~ /^HomeCMD/x && $init_done)
     {
@@ -2145,7 +2150,7 @@ sub Attr
         "Invalid value $attr_value for attribute $attr_name. You have to provide at least one value or max 3 values pipe separated, e.g. asleep|gotosleep";
       return $text if ($attr_value !~ /^(asleep|gotosleep|awoken)(\|(asleep|gotosleep|awoken)){0,2}$/x);
     }
-    elsif ($attr_name =~ /^HomeEvents(Holiday|Calendar)Devices$/x && $init_done)
+    elsif ($attr_name =~ /^HomeEventsDevices$/x && $init_done)
     {
       my $d = devspec2array($attr_value);
       if ($d eq $attr_value)
@@ -2526,15 +2531,19 @@ sub Attr
     {
       $langDE = AttrVal('global','language','DE') ? 1 : undef;
     }
-    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEvents(Holiday|Calendar)Devices|HomeSensorAirpressure|HomeSensorWindspeed|HomeSensorsBattery|HomeSensorsBatteryReading)$/x)
+    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEventsDevices|HomeSensorAirpressure|HomeSensorWindspeed|HomeSensorsBattery|HomeSensorsBatteryReading)$/x)
     {
-      CommandDeleteReading(undef,"$name event-.+") if ($attr_name =~ /^HomeEvents(Holiday|Calendar)Devices$/x);
+      CommandDeleteReading(undef,"$name event-.+") if ($attr_name =~ /^HomeEventsDevices$/x);
       CommandDeleteReading(undef,"$name battery.*|lastBatteryLow") if ($attr_name eq 'HomeSensorsBattery');
       updateInternals($hash);
     }
     elsif ($attr_name =~ /^HomeEventsFilter-.+$/x)
     {
       updateInternals($hash);
+    }
+    elsif ($attr_name eq 'HomeSensorsContactOpenWarningUnified')
+    {
+      addSensorsUserAttr($hash,$hash->{SENSORSCONTACT},$hash->{SENSORSCONTACT}) if ($init_done);
     }
     elsif ($attr_name =~ /^(HomeSensorsContact|HomeSensorsMotion)$/x)
     {
@@ -2902,9 +2911,9 @@ sub ForecastTXT
   $day = 2 if (!$day);
   my $name = $hash->{NAME};
   my $weather = AttrVal($name,'HomeWeatherDevice','');
-  my $cond = ReadingsVal($weather,'fc'.$day.'_condition','<NO VALUE>');
-  my $low  = ReadingsVal($weather,'fc'.$day.'_low_c','<NO VALUE>');
-  my $high = ReadingsVal($weather,'fc'.$day.'_high_c','<NO VALUE>');
+  my $cond = ReadingsVal($weather,'fc'.$day.'_condition','n.a.');
+  my $low  = ReadingsVal($weather,'fc'.$day.'_low_c','n.a.');
+  my $high = ReadingsVal($weather,'fc'.$day.'_high_c','n.a.');
   my $temp = ReadingsVal($name,'temperature','');
   my $hum = ReadingsVal($name,'humidity','');
   my $chill = ReadingsNum($weather,'apparentTemperature',0);
@@ -3138,15 +3147,17 @@ sub addSensorsUserAttr
     }
     if (grep {$_ eq $sensor} split /,/x,InternalVal($name,'SENSORSCONTACT',''))
     {
-      my $unified = AttrVal($name,'HomeSensorsContactOpenWarningUnified',0);
       push @list,'HomeContactType:doorinside,dooroutside,doormain,window';
       # push @list,'HomeCMDcontactOpen:textField-long';
       # push @list,'HomeCMDcontactClose:textField-long';
       push @list,'HomeOpenDontTriggerModes';
       push @list,'HomeOpenDontTriggerModesResidents';
       push @list,'HomeOpenMaxTrigger';
-      push @list,'HomeOpenTimeDividers' if ($unified);
-      push @list,'HomeOpenTimes' if ($unified);
+      if (AttrVal($name,'HomeSensorsContactOpenWarningUnified',0))
+      {
+        push @list,'HomeOpenTimes';
+        push @list,'HomeOpenTimeDividers';
+      }
       push @list,'HomeReadingContact';
       push @list,'HomeValueContact';
       push @list,'HomeReadingTamper' if ($migrate);
@@ -3501,12 +3512,12 @@ sub ContactOpenWarning
     $retrigger = $rt;
   }
   my $openwarn = join ',',sort @warn1;
-  my $openwarnex = join ',',sort @warnexp;
+  my $openwarnexp = join ',',sort @warnexp;
   readingsBeginUpdate($hash);
   readingsBulkUpdateIfChanged($hash,'contactWarning',$openwarn);
   readingsBulkUpdateIfChanged($hash,'contactWarning_ct',int(@warn1));
   readingsBulkUpdateIfChanged($hash,'contactWarning_hr',makeHR($hash,0,@warn1));
-  readingsBulkUpdateIfChanged($hash,'contactWarningExpired',$openwarnex);
+  readingsBulkUpdateIfChanged($hash,'contactWarningExpired',$openwarnexp);
   readingsBulkUpdateIfChanged($hash,'contactWarningExpired_ct',int(@warnexp));
   readingsBulkUpdateIfChanged($hash,'contactWarningExpired_hr',makeHR($hash,0,@warnexp));
   readingsEndUpdate($hash,1);
@@ -4950,7 +4961,7 @@ sub inform
   If you also add your Weather device you'll also get short and long weather informations and weather forecast.<br>
   You can monitor added contact and motion sensors and execute CMDs depending on their state.<br>
   A simple alarm system is included, so your contact and motion sensors can trigger alarms depending on the current alarm mode.<br>
-  A lot of customizations are possible, e.g. special event (holiday) calendars and locations.<br>
+  A lot of customizations are possible, e.g. special events calendars and locations.<br>
   <p><b>General information:</b></p>
   <ul>
     <li>
@@ -6184,7 +6195,7 @@ sub inform
     </li>
     <li>
       <a id='HOMEMODE-read-event-' data-pattern='event-.+'>event-&lt;%CALENDAR%&gt;</a><br>
-      current event of the (holiday) CALENDAR device(s)
+      current event of the CALENDAR device(s)
     </li>
     <li>
       <a id='HOMEMODE-read-humidty'>humidty</a><br>
