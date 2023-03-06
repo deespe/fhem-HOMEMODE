@@ -4352,14 +4352,14 @@ sub Details
       $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Battery">'.$text.'</button>' if (@batteries);
       $text = $langDE?'Kontakte':'Contacts';
       $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Contact">'.$text.'</button>' if (@contacts);
-      $text = $langDE?'Verbrauchsmesser':'Energy sensors';
-      $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Energy">'.$text.'</button>' if (@energies);
       $text = $langDE?'Lichtmesser':'Light sensors';
       $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Luminance">'.$text.'</button>' if (@lights);
       $text = $langDE?'Bewegungsmelder':'Motion sensors';
       $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Motion">'.$text.'</button>' if (@motions);
       $text = $langDE?'Leistungsmesser':'Power sensors';
       $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Power">'.$text.'</button>' if (@powers);
+      $text = $langDE?'Verbrauchsmesser':'Energy sensors';
+      $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Energy">'.$text.'</button>' if (@energies);
       $text = $langDE?'Rauchmelder':'Smoke sensors';
       $html .= '<button class="HOMEMODE_button" id="HOMEMODE-Smoke">'.$text.'</button>' if (@smokes);
       $text = $langDE?'Sabotagekontakte':'Tamper sensors';
