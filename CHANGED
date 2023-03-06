@@ -1,14 +1,30 @@
-v1.6.0
-  - add subsequent optional [NAME] to setter anyOneElseAtHome
-  - rework attributes of HOMEMODE, now the attribut 'userattr' is obsolete
-  - change attribute name HomeAdvancedUserAttr to HomeAdvancedAttributes
-  - change from scalar() to int() on arrays
-  - standardize all greps and splits
-  - change greps from regex to eg where possible
-  - remove greps on arrays where possible and instead use uniq
-  - separated module init process to own function
-  - remove use POSIX
-  - fix Home attributes being added to sensors multiple times
+v2.0.0
+  - added:    META.json
+  - added:    buttons and panels for all devices which need specific userattr for HOMEMODE to work properly
+  - added:    botton to hide/show the internals and the readings
+  - added:    cookies for some settings
+  - added:    jQuery cookie library into homemode.js
+  - added:    subsequent optional [NAME] to setter anyOneElseAtHome
+  - added:    water sensors
+  - added:    new attribute HomeEventsFilter-CALENDARNAME to filter out speciffic calendar events/summaries for each calendar
+  - fixed:    Home attributes being added to sensors multiple times
+  - fixed:    update internals after set/del attr HomeSensorsBatteryLowPercentage
+  - changed:  AttrFn not being executed until $init_done on HOMEMODE < 1.6
+  - changed:  attribute name HomeAdvancedUserAttr to HomeAdvancedAttributes
+  - changed:  from scalar() to int() on arrays
+  - changed:  greps from regex to eg where possible
+  - changed:  moved javascript to external file homemode.js
+  - chnaged:  make the module a package
+  - changed:  standardized all greps and splits
+  - changed:  unified some functions
+  - changed:  unified attributes HomeEventsHolidayDevices and HomeEventsCalendarDevices into HomeEventsDevices
+  - changed:  lots of minor changes
+  - merged:   HOMEMODE 2.0 branch manually
+  - removed:  greps on arrays where possible and instead use uniq on the final array
+  - removed:  prototypes of functions
+  - removed:  use POSIX
+  - reworked: attributes of HOMEMODE - now the attribut 'userattr' is obsolete
+  - reworked: module init process and moved it to its own function
 v1.5.7
   - add pressureTrend reading when using weather device
   - add hint if weather device is not added to HOMEMODE or not available
