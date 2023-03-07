@@ -4,9 +4,10 @@ v2.0.0
   - added:    botton to hide/show the internals and the readings
   - added:    cookies for some settings
   - added:    jQuery cookie library into homemode.js
+  - added:    more HomeKit Characteristics
+  - added:    new attribute HomeEventsFilter-CALENDARNAME to filter out speciffic calendar events/summaries for each calendar
   - added:    subsequent optional [NAME] to setter anyOneElseAtHome
   - added:    water sensors
-  - added:    new attribute HomeEventsFilter-CALENDARNAME to filter out speciffic calendar events/summaries for each calendar
   - fixed:    Home attributes being added to sensors multiple times
   - fixed:    update internals after set/del attr HomeSensorsBatteryLowPercentage
   - changed:  AttrFn not being executed until $init_done on HOMEMODE < 1.6
