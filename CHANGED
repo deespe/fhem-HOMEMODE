@@ -26,6 +26,10 @@ v2.0.0
   - removed:  use POSIX
   - reworked: attributes of HOMEMODE - now the attribut 'userattr' is obsolete
   - reworked: module init process and moved it to its own function
+v1.5.9
+  - fix devStateIcon new line issue
+v1.5.8
+  - fix homebridgeMapping new line issue
 v1.5.7
   - add pressureTrend reading when using weather device
   - add hint if weather device is not added to HOMEMODE or not available
