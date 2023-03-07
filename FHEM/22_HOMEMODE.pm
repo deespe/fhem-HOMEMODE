@@ -125,17 +125,17 @@ sub Define
   $hash->{NOTIFYDEV} = 'global';
   if ($init_done && !defined $hash->{OLDDEF})
   {
-    $attr{$name}{devStateIcon}  = 'absent:user_away:dnd+on\n'.
-                                  'gone:user_ext_away:dnd+on\n'.
-                                  'dnd:audio_volume_mute:dnd+off\n'.
-                                  'gotosleep:scene_sleeping:dnd+on\n'.
-                                  'asleep:scene_sleeping_alternat:dnd+on\n'.
-                                  'awoken:weather_sunrise:dnd+on\n'.
-                                  'home:status_available:dnd+on\n'.
-                                  'morning:weather_sunrise:dnd+on\n'.
-                                  'day:weather_sun:dnd+on\n'.
-                                  'afternoon:weather_summer:dnd+on\n'.
-                                  'evening:weather_sunset:dnd+on\n'.
+    $attr{$name}{devStateIcon}  = "absent:user_away:dnd+on\n".
+                                  "gone:user_ext_away:dnd+on\n".
+                                  "dnd:audio_volume_mute:dnd+off\n".
+                                  "gotosleep:scene_sleeping:dnd+on\n".
+                                  "asleep:scene_sleeping_alternat:dnd+on\n".
+                                  "awoken:weather_sunrise:dnd+on\n".
+                                  "home:status_available:dnd+on\n".
+                                  "morning:weather_sunrise:dnd+on\n".
+                                  "day:weather_sun:dnd+on\n".
+                                  "afternoon:weather_summer:dnd+on\n".
+                                  "evening:weather_sunset:dnd+on\n".
                                   'night:weather_moon_phases_2:dnd+on';
     $attr{$name}{icon}          = 'floor';
     $attr{$name}{room}          = 'HOMEMODE';
