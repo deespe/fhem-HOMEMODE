@@ -5,13 +5,16 @@ v2.0.0
   - added:    cookies for some settings
   - added:    jQuery cookie library into homemode.js
   - added:    more HomeKit Characteristics
+  - added:    new attribute HomeSensorsBatteryTypes to whitelist speciffic device types as battery sensors
   - added:    new attribute HomeEventsFilter-CALENDARNAME to filter out speciffic calendar events/summaries for each calendar
+  - added:    setter updateSensorsUserAttr to readd all attributes needed for HOMEMODE to work properly
   - added:    subsequent optional [NAME] to setter anyOneElseAtHome
   - added:    water sensors
   - fixed:    Home attributes being added to sensors multiple times
   - fixed:    update internals after set/del attr HomeSensorsBatteryLowPercentage
   - changed:  AttrFn not being executed until $init_done on HOMEMODE < 1.6
   - changed:  attribute name HomeAdvancedUserAttr to HomeAdvancedAttributes
+  - changed:  attribute name HomeSensorWindspeed to HomeSensorWind
   - changed:  from scalar() to int() on arrays
   - changed:  greps from regex to eg where possible
   - changed:  moved javascript to external file homemode.js

@@ -19,16 +19,17 @@ use Data::Dumper;
 use GPUtils qw(GP_Import);
 
 
-my $HOMEMODE_version = '2.0.0';
+my $HOMEMODE_version = '2.0.0beta1';
 my $HOMEMODE_Daytimes = '05:00|morning 10:00|day 14:00|afternoon 18:00|evening 23:00|night';
 my $HOMEMODE_Seasons = '03.01|spring 06.01|summer 09.01|autumn 12.01|winter';
 my $HOMEMODE_UserModes = 'gotosleep,awoken,asleep';
 my $HOMEMODE_UserModesAll = $HOMEMODE_UserModes.',home,absent,gone';
 my $HOMEMODE_AlarmModes = 'disarm,confirm,armhome,armnight,armaway';
 my $HOMEMODE_Locations = 'arrival,home,bed,underway,wayhome';
+my $HOMEMODE_batTypes = 'AutomowerConnectDevice|BOTVAC|CUL.*|GardenaSmartDevice|HOMBOT|HUEDevice|HusqvarnaAutomower|INDEGO|IT|LaCrosse|MAX|MQTT_DEVICE|MQTT2_DEVICE|netatmo|NUKIDevice|OBIS|PRESENCE|XiaomiDevice|XiaomiFlowerSens|XiaomiSmartHome_Device|ZWave';
 my $langDE;
 my $ver = $HOMEMODE_version;
-$ver =~ s/\.\d{1,2}$//x;
+$ver =~ s/\.\d{1,2}(beta\d+)?$//x;
 
 BEGIN {
   GP_Import(
@@ -310,6 +311,11 @@ sub migrate
   {
     CommandAttr(undef,$name.' HomeSensorsSmokeValues '.AttrVal($name,'HomeSensorsSmokeValue',undef));
     CommandDeleteAttr(undef,$name.' HomeSensorsSmokeValue');
+  }
+  if (AttrVal($name,'HomeSensorWindspeed',undef))
+  {
+    CommandAttr(undef,$name.' HomeSensorWind '.AttrVal($name,'HomeSensorWindspeed',undef));
+    CommandDeleteAttr(undef,$name.' HomeSensorWindspeed');
   }
   my $hehd = AttrVal($name,'HomeEventsHolidayDevices',undef);
   my $hecd = AttrVal($name,'HomeEventsCalendarDevices',undef);
@@ -599,9 +605,9 @@ sub Notify
           last;
         }
       }
-      if (AttrVal($name,'HomeSensorWindspeed',undef) && $devname eq (split /:/x,AttrVal($name,'HomeSensorWindspeed',''))[0])
+      if (AttrVal($name,'HomeSensorWind',undef) && $devname eq (split /:/x,AttrVal($name,'HomeSensorWind',''))[0])
       {
-        my $read = (split /:/x,AttrVal($name,'HomeSensorWindspeed',''))[1];
+        my $read = (split /:/x,AttrVal($name,'HomeSensorWind',''))[1];
         if (grep {/^$read:\s(.+)$/} @{$events})
         {
           for my $evt (@{$events})
@@ -711,7 +717,13 @@ sub Notify
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSLIGHT',''))
       {
         my $read = AttrVal($devname,'HomeReadingLuminance',AttrVal($name,'HomeSensorsLuminanceReading','luminance'));
-        Luminance($hash) if (grep {/^$read:\s.+$/} @{$events});
+        for my $evt (@{$events})
+        {
+          next unless ($evt =~ /^$read:\s(.+)$/);
+          Luminance($hash);
+          inform($hash,"$devname.$read",$1);
+          last;
+        }
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSMOTION',''))
       {
@@ -1020,22 +1032,11 @@ sub updateInternals
       my @sensors;
       for my $s (devspec2array($battery))
       {
-        my @reads = split ' ',AttrVal($name,'HomeSensorsBatteryReading','battery batteryState batteryPercent');
-        for my $r (@reads)
-        {
-          my $val = ReadingsVal($s,$r,'');
-          next unless ($val =~ /^(ok|low|nok|\d{1,3})(%|\s%)?$/);
-          push @sensors,$s;
-          push @allMonitoredDevices,$s;
-          if (!grep {$_ eq $s} split /,/x,ReadingsVal($name,'batteryLow',''))
-          {
-            CommandTrigger(undef,"$s $r: ok") if ($val =~ /^(low|nok)$/x);
-            CommandTrigger(undef,"$s $r: 100") if ($val =~ /^\d{1,3}$/x);
-            CommandTrigger(undef,"$s $r: 100%") if ($val =~ /^\d{1,3}%$/x);
-            CommandTrigger(undef,"$s $r: 100 %") if ($val =~ /^\d{1,3}\s%$/);
-            CommandTrigger(undef,"$s $r: $val");
-          }
-        }
+        my $t = AttrCheck($hash,'HomeSensorsBatteryTypes','');
+        my $types = $t?"$HOMEMODE_batTypes|$t":$HOMEMODE_batTypes;
+        next unless ($defs{$s}->{TYPE} =~ /^$types$/x);
+        push @sensors,$s;
+        push @allMonitoredDevices,$s;
       }
       my $list = join(',',uniq sort @sensors);
       $hash->{SENSORSBATTERY} = $list;
@@ -1056,6 +1057,7 @@ sub updateInternals
       }
       my $list = join(',',sort @sensors);
       $hash->{SENSORSLIGHT} = $list;
+      addSensorsUserAttr($hash,$list,$oldLumis) if ($migrate || ($force && !$oldLumis) || ($oldLumis && $list ne $oldLumis));
     }
     my $weather = AttrCheck($hash,'HomeWeatherDevice');
     push @allMonitoredDevices,$weather if ($weather);
@@ -1090,7 +1092,7 @@ sub updateInternals
     push @allMonitoredDevices,$uwz;
     my $pressure = (split /:/x,AttrCheck($hash,'HomeSensorAirpressure'))[0];
     push @allMonitoredDevices,$pressure if ($pressure);
-    my $wind = (split /:/x,AttrCheck($hash,'HomeSensorWindspeed'))[0];
+    my $wind = (split /:/x,AttrCheck($hash,'HomeSensorWind'))[0];
     push @allMonitoredDevices,$wind if ($wind);
     my $panic = (split /:/x,AttrCheck($hash,'HomeTriggerPanic'))[0];
     push @allMonitoredDevices,$panic if ($panic);
@@ -1759,10 +1761,11 @@ sub AttrList
     'HomeSensorAirpressure:textField',
     'HomeSensorHumidityOutside',
     'HomeSensorTemperatureOutside',
-    'HomeSensorWindspeed:textField',
+    'HomeSensorWind:textField',
     'HomeSensorsAlarmDelay:textField',
     'HomeSensorsBattery:textField',
     'HomeSensorsBatteryReading:textField',
+    'HomeSensorsBatteryTypes:textField',
     'HomeSensorsContact:textField',
     'HomeSensorsContactReading:textField',
     'HomeSensorsLuminance:textField',
@@ -2162,7 +2165,7 @@ sub Attr
       }
       else
       {
-        updateInternals($hash,1);
+        updateInternals($hash);
       }
     }
     elsif ($attr_name =~ /^HomeEventsFilter-.+$/x && $init_done)
@@ -2191,6 +2194,14 @@ sub Attr
         "Invalid value $attr_value for attribute $attr_name. You have to provide at least one value or more values pipe separated, e.g. open|tilted|on";
       return $text if ($attr_value !~ /^[\w\-\+\*\.\(\)]+(\|[\w\-\+\*\.\(\)]+){0,}$/xi);
     }
+    elsif ($attr_name eq "HomeSensorsBatteryTypes")
+    {
+      $text = $langDE?
+        "Ungültiger Wert $attr_value für Attribut $attr_name. Es wird wenigstens ein Wert oder mehrere Pipe separierte Werte benötigt! z.B. dummy|YOURMODULE":
+        "Invalid value $attr_value for attribute $attr_name. You have to provide at least one value or more values pipe separated, e.g. dummy|YOURMODULE";
+      return $text if ($attr_value !~ /^[\w\-\+\*\.\(\)]+(\|[\w\-\+\*\.\(\)]+){0,}$/xi);
+      updateInternals($hash);
+    }
     elsif ($attr_name eq 'HomeIcewarningOnOffTemps')
     {
       $text = $langDE?
@@ -2211,13 +2222,6 @@ sub Attr
         "Anzahl von $attr_name Werten ($t) ungleich zu den verfügbaren Jahreszeiten ($s) im Attribut HomeSeasons!":
         "Number of $attr_name values ($t) not matching the number of available seasons ($s) in attribute HomeSeasons!";
       return $text if ($s != $t);
-      for (@times)
-      {
-        $text = $langDE?
-          'Teiler dürfen nicht 0 sein, denn Division durch 0 ist nicht definiert!':
-          'Dividers can´t be zero, because division by zero is not defined!';
-        return $text if ($_ == 0);
-      }
     }
     elsif ($attr_name eq 'HomeSensorsContactOpenTimeMin')
     {
@@ -2235,8 +2239,8 @@ sub Attr
       for (split ' ',$attr_value)
       {
         $text = $langDE?
-          'Teiler dürfen nicht 0 sein, denn Division durch 0 ist nicht definiert!':
-          'Dividers can´t be zero, because division by zero is not defined!';
+          '0 ist kein gültiger Zeitwert!':
+          '0 is not a valid time value!';
         return $text if ($_ == 0);
       }
     }
@@ -2277,24 +2281,6 @@ sub Attr
       return $text if (!CheckIfIsValidDevspec($name,$attr_value));
       updateInternals($hash,1) if ($attr_value ne $attr_value_old);
     }
-    elsif ($attr_name eq 'HomeSensorsPower' && $init_done)
-    {
-      my $p = AttrVal($name,'HomeSensorsPowerReading','power');
-      $text = $langDE?
-        "$attr_value muss ein gültiger Devspec mit '$p' Reading sein!":
-        "$attr_value must be a valid devspec with '$p' reading!";
-      return $text if (!CheckIfIsValidDevspec($name,$attr_value,$p));
-      updateInternals($hash);
-    }
-    elsif ($attr_name eq 'HomeSensorsEnergy' && $init_done)
-    {
-      my $e = AttrVal($name,'HomeSensorsEnergyReading','energy');
-      $text = $langDE?
-        "$attr_value muss ein gültiger Devspec mit '$e' Readings sein!":
-        "$attr_value must be a valid devspec with '$e' reading!";
-      return $text if (!CheckIfIsValidDevspec($name,$attr_value,$e));
-      updateInternals($hash);
-    }
     elsif ($attr_name eq 'HomeTwilightDevice' && $init_done)
     {
       $text = $langDE?
@@ -2316,9 +2302,9 @@ sub Attr
       if ($attr_value_old ne $attr_value)
       {
         CommandDeleteReading(undef,"$name pressure") if (!AttrVal($name,'HomeSensorAirpressure',undef));
-        CommandDeleteReading(undef,"$name wind") if (!AttrVal($name,'HomeSensorWindspeed',undef));
-        CommandDeleteReading(undef,"$name temperature") if (!AttrVal($name,'HomeSensorTemperatureOutside',undef));
-        CommandDeleteReading(undef,"$name humidity") if (!AttrVal($name,'HomeSensorHumidityOutside',undef));
+        CommandDeleteReading(undef,"$name wind.*") if (!AttrVal($name,'HomeSensorWind',undef));
+        CommandDeleteReading(undef,"$name temperature.*") if (!AttrVal($name,'HomeSensorTemperatureOutside',undef));
+        CommandDeleteReading(undef,"$name humidity.*") if (!AttrVal($name,'HomeSensorHumidityOutside',undef));
         updateInternals($hash);
       }
     }
@@ -2395,7 +2381,7 @@ sub Attr
           my $time = (split /\|/x)[0];
           my ($m,$d) = split /\./x,$time;
           my $days = $m * 31 + $d;
-          my $lastdays = @ds ? $ds[int(@ds) - 1] : -1;
+          my $lastdays = @ds ? $ds[int(@ds)-1] : -1;
           if ($days > $lastdays)
           {
             push @ds,$days;
@@ -2464,7 +2450,7 @@ sub Attr
         "$attr_name must be a single number, but not 0, p.e. 1000 or 0.001!";
       return $text if ($attr_value !~ /^(?!0)\d+(\.\d+)?$/x || !CheckIfIsValidDevspec($name,$1,$2));
     }
-    elsif ($attr_name =~ /^HomeSensorAirpressure|HomeSensorWindspeed$/x && $init_done)
+    elsif ($attr_name =~ /^HomeSensorAirpressure|HomeSensorWind$/x && $init_done)
     {
       $text = $langDE?
         "$attr_name muss ein einzelnes gültiges Gerät und Reading sein (Sensor:Reading)!":
@@ -2478,15 +2464,6 @@ sub Attr
         "$attr_name muss eine einzelne Zahl (in Sekunden) sein oder drei leerzeichengetrennte Zahlen (in Sekunden sein für jeden Alarm Modus individuell (armaway armhome armnight).":
         "$attr_name must be a single number (in seconds) or three space separated numbers (in seconds)<br>for each alarm mode individually (armaway armhome armnight).";
       return $text if ($attr_value !~ /^\d{1,3}((\s\d{1,3}){2})?$/);
-    }
-    elsif ($attr_name eq 'HomeSensorsBattery' && $init_done)
-    {
-      my $read = AttrVal($name,'HomeSensorsBatteryReading','battery');
-      $text = $langDE?
-        "$attr_name muss ein gültiges Gerät mit $read Reading sein!":
-        "$attr_name must be a valid device with $read reading!";
-      return $text if (!CheckIfIsValidDevspec($name,$attr_value,$read));
-      updateInternals($hash);
     }
     elsif ($attr_name eq 'HomeSensorsBatteryLowPercentage')
     {
@@ -2531,7 +2508,7 @@ sub Attr
     {
       $langDE = AttrVal('global','language','DE') ? 1 : undef;
     }
-    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEventsDevices|HomeSensorAirpressure|HomeSensorWindspeed|HomeSensorsBattery|HomeSensorsBatteryReading)$/x)
+    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEventsDevices|HomeSensorAirpressure|HomeSensorWind|HomeSensorsBattery|HomeSensorsBatteryReading)$/x)
     {
       CommandDeleteReading(undef,"$name event-.+") if ($attr_name =~ /^HomeEventsDevices$/x);
       CommandDeleteReading(undef,"$name battery.*|lastBatteryLow") if ($attr_name eq 'HomeSensorsBattery');
@@ -2547,10 +2524,8 @@ sub Attr
     }
     elsif ($attr_name =~ /^(HomeSensorsContact|HomeSensorsMotion)$/x)
     {
-      my $olddevs = $hash->{SENSORSCONTACT};
-      $olddevs = $hash->{SENSORSMOTION} if ($attr_name eq 'HomeSensorsMotion');
-      my $read = 'lastContact|prevContact|contacts.*';
-      $read = 'lastMotion|prevMotion|motions.*' if ($attr_name eq 'HomeSensorsMotion');
+      my $olddevs = ($attr_name eq 'HomeSensorsMotion')?$hash->{SENSORSMOTION}:$hash->{SENSORSCONTACT};
+      my $read = ($attr_name eq 'HomeSensorsMotion')?'lastMotion|prevMotion|motion.*':'lastContact|prevContact|contact.*';
       CommandDeleteReading(undef,"$name $read");
       updateInternals($hash);
       cleanUserattr($hash,$olddevs);
@@ -2562,12 +2537,12 @@ sub Attr
     }
     elsif ($attr_name eq 'HomeSensorsEnergy')
     {
-      CommandDeleteReading(undef,"$name energy");
+      CommandDeleteReading(undef,"$name energy.*");
       updateInternals($hash);
     }
     elsif ($attr_name eq 'HomeSensorsPower')
     {
-      CommandDeleteReading(undef,"$name power");
+      CommandDeleteReading(undef,"$name power.*");
       updateInternals($hash);
     }
     elsif ($attr_name eq 'HomePublicIpCheckInterval')
@@ -2578,9 +2553,9 @@ sub Attr
     {
       if ($attr_name eq 'HomeWeatherDevice')
       {
-        CommandDeleteReading(undef,"$name pressure|wind");
-        CommandDeleteReading(undef,"$name temperature") if (!AttrVal($name,'HomeSensorTemperatureOutside',undef));
-        CommandDeleteReading(undef,"$name humidity") if (!AttrVal($name,'HomeSensorHumidityOutside',undef));
+        CommandDeleteReading(undef,"$name pressure|wind.*");
+        CommandDeleteReading(undef,"$name temperature.*") if (!AttrVal($name,'HomeSensorTemperatureOutside',undef));
+        CommandDeleteReading(undef,"$name humidity.*") if (!AttrVal($name,'HomeSensorHumidityOutside',undef));
       }
       else
       {
@@ -2604,7 +2579,11 @@ sub Attr
       CommandDeleteReading(undef,"$name .*luminance.*") if ($attr_name eq 'HomeSensorsLuminance');
       updateInternals($hash);
     }
-    elsif ($attr_name eq 'HomeSensorsBatteryLowPercentage')
+    elsif ($attr_name =~ /^HomeSensorsBatteryLowPercentage$/x)
+    {
+      updateInternals($hash);
+    }
+    elsif ($attr_name =~ /^HomeSensorsBatteryTypes$/x)
     {
       updateInternals($hash);
     }
@@ -3765,8 +3744,8 @@ sub EventCommands
     {
       @prevevents = uniq sort @prevevents;
       $update = join ',',@prevevents;
-    readingsSingleUpdate($hash,"event-$cal",$update,1);
     }
+    readingsSingleUpdate($hash,"event-$cal",$update,1);
   }
   for (@cmds)
   {
@@ -3941,9 +3920,9 @@ sub Weather
   readingsBeginUpdate($hash);
   readingsBulkUpdate($hash,'humidity',ReadingsNum($dev,'humidity',5)) if ((!AttrVal($name,'HomeSensorTemperatureOutside',undef) || (AttrVal($name,'HomeSensorTemperatureOutside',undef) && !ID(AttrVal($name,'HomeSensorTemperatureOutside',undef),'.*','humidity'))) && !AttrVal($name,'HomeSensorHumidityOutside',undef));
   readingsBulkUpdate($hash,'temperature',ReadingsNum($dev,'temperature',5)) if (!AttrVal($name,'HomeSensorTemperatureOutside',undef));
-  readingsBulkUpdate($hash,'wind',ReadingsNum($dev,'wind',0)) if (!AttrVal($name,'HomeSensorWindspeed',undef));
-  readingsBulkUpdate($hash,'windGust',ReadingsNum($dev,'windGust',0)) if (!AttrVal($name,'HomeSensorWindspeed',undef));
-  readingsBulkUpdate($hash,'windDirection',ReadingsNum($dev,'wind_direction',0)) if (!AttrVal($name,'HomeSensorWindspeed',undef));
+  readingsBulkUpdate($hash,'wind',ReadingsNum($dev,'wind',0)) if (!AttrVal($name,'HomeSensorWind',undef));
+  readingsBulkUpdate($hash,'windGust',ReadingsNum($dev,'windGust',0)) if (!AttrVal($name,'HomeSensorWind',undef));
+  readingsBulkUpdate($hash,'windDirection',ReadingsNum($dev,'wind_direction',0)) if (!AttrVal($name,'HomeSensorWind',undef));
   readingsBulkUpdate($hash,'pressure',ReadingsNum($dev,'pressure',5)) if (!AttrVal($name,'HomeSensorAirpressure',undef));
   readingsBulkUpdate($hash,'weatherTextLong',$wl);
   readingsBulkUpdate($hash,'weatherTextShort',$ws);
@@ -5537,7 +5516,7 @@ sub inform
       main outside airpressure sensor
     </li>
     <li>
-      <a id='HOMEMODE-attr-HomeSensorWindspeed'>HomeSensorWindspeed</a><br>
+      <a id='HOMEMODE-attr-HomeSensorWind'>HomeSensorWind</a><br>
       main outside wind speed sensor
     </li>
     <li>
@@ -5576,6 +5555,11 @@ sub inform
       a single word of name of the reading indicating the battery value<br>
       this is only here available as global setting for all devices<br>
       default: battery
+    </li>
+    <li>
+      <a id='HOMEMODE-attr-HomeSensorsBatteryTypes'>HomeSensorsBatteryTypes</a><br>
+      regex of device types to use as battery sensors<br>
+      default:
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsContact'>HomeSensorsContact</a><br>
