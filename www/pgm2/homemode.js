@@ -6,7 +6,7 @@ $(FW_HomeModeReadyFn);
 const translations = {
   "EN": [
     "Can't delete this attribute because it is not set!",
-    "Invalid value!<br>Must be a single number (seconds) or three space separated numbers (seconds)<br>for each alarm mode individually (armaway armhome armnight).",
+    "Invalid value!<br>Must be a single number (seconds) or three space separated numbers (seconds)<br>for each alarm mode individually (armaway armnight armhome).",
     "Invalid value!<br>This should be the maximum number how often open warnings should be repeated.",
     "Invalid value!<br>You have to provide space separated numbers, e.g. 5 10 15 17.5",
     "Invalid value!<br>You have to provide space separated numbers for each season in order of the seasons provided in attribute HomeSeasons, e.g. 2 1 2 3.333",
@@ -20,7 +20,7 @@ const translations = {
   ],
   "DE": [
     "Kann dieses Attribut nicht löschen weil es nicht gesetzt ist!",
-    "Ungültiger Wert!<br>Muss eine einzelne Zahl (Sekunden) oder 3 leerzeichenseparierte Zahlen (Sekunden)<br>für jeden Alarmmodus individuell (armaway armhome armnight).",
+    "Ungültiger Wert!<br>Muss eine einzelne Zahl (Sekunden) oder 3 leerzeichenseparierte Zahlen (Sekunden)<br>für jeden Alarmmodus individuell (armaway armnight armhome).",
     "Ungültiger Wert!<br>Das ist die maximale Anzahl wie oft Offenwarnungen wiederholt werden sollen.",
     "Ungültiger Wert!<br>Es sind nur leerzeichenseparierte Zahlen erlaubt, z.B. 5 10 15 17.5",
     "Ungültiger Wert!<br>Es sind nur leerzeichenseparierte Zahlen erlaubt, eine für jede Jahreszeit die im Attribut HomeSeasons gesetzt wurden, z.B. 2 1 2 3.333",
