@@ -220,86 +220,96 @@ sub migrate
   my $name = $hash->{NAME};
   my @tampers;
   my @tampread;
-  for my $sen (split /,/x,InternalVal($name,'SENSORSCONTACT',''))
+  my $contacts = InternalVal($name,'SENSORSCONTACT','');
+  my $hscr = AttrVal($name,'HomeSensorsContactReadings','state sabotageError');
+  my $hscv = AttrVal($name,'HomeSensorsContactValues','open|tilted|on|1|true');
+  if ($contacts)
   {
-    my ($con,$sab) = split ' ',AttrVal($sen,'HomeReadings',AttrVal($name,'HomeSensorsContactReadings','state sabotageError'));
-    my $cv = AttrVal($sen,'HomeValues',AttrVal($name,'HomeSensorsContactValues','open|tilted|on'));
-    push @tampread,$sab;
-    if (ReadingsVal($sen,$con,undef))
+    for my $sen (split /,/x,$contacts)
     {
-      CommandAttr(undef,$sen.' HomeReadingContact '.$con) if ($con ne 'state');
-      CommandAttr(undef,$sen.' HomeValueContact '.$cv) if ($cv ne 'open|tilted|on');
+      my ($con,$sab) = split ' ',AttrVal($sen,'HomeReadings',$hscr);
+      my $cv = AttrVal($sen,'HomeValues',$hscv);
+      push @tampread,$sab;
+      if (defined ReadingsVal($sen,$con,undef))
+      {
+        CommandAttr(undef,$sen.' HomeReadingContact '.$con) if ($con ne 'state');
+        CommandAttr(undef,$sen.' HomeValueContact '.$cv) if ($cv ne 'open|tilted|on|1|true');
+      }
+      if (defined ReadingsVal($sen,$sab,undef))
+      {
+        push @tampers,$sen;
+        CommandAttr(undef,$sen.' HomeReadingTamper '.$sab) if ($sab ne 'sabotageError');
+        CommandAttr(undef,$sen.' HomeValueTamper '.$cv) if ($cv ne 'open|tilted|on|1|true');
+      }
+      CommandDeleteAttr(undef,$sen.' HomeValues') if (AttrVal($sen,'HomeValues',undef));
+      CommandDeleteAttr(undef,$sen.' HomeReadings') if (AttrVal($sen,'HomeReadings',undef));
     }
-    if (ReadingsVal($sen,$sab,undef))
-    {
-      push @tampers,$sen;
-      CommandAttr(undef,$sen.' HomeReadingTamper '.$sab) if ($sab ne 'sabotageError');
-      CommandAttr(undef,$sen.' HomeValueTamper '.$cv) if ($cv ne 'open|tilted|on');
-    }
-    CommandDeleteAttr(undef,$sen.' HomeValues') if (AttrVal($sen,'HomeValues',undef));
-    CommandDeleteAttr(undef,$sen.' HomeReadings') if (AttrVal($sen,'HomeReadings',undef));
   }
-  for my $sen (split /,/x,InternalVal($name,'SENSORSMOTION',''))
+  CommandDeleteAttr(undef,$name.' HomeSensorsContactReadings') if ($hscr);
+  CommandDeleteAttr(undef,$name.' HomeSensorsContactValues') if ($hscv);
+  my $motions = InternalVal($name,'SENSORSMOTION','');
+  my $hsmr = AttrVal($name,'HomeSensorsMotionReadings','state sabotageError');
+  my $hsmv = AttrVal($name,'HomeSensorsMotionValues','motion|open|on|1|true');
+  if ($motions)
   {
-    my ($mo,$sab) = split ' ',AttrVal($sen,'HomeReadings',AttrVal($name,'HomeSensorsMotionReadings','state sabotageError'));
-    my $mv = AttrVal($sen,'HomeValues',AttrVal($name,'HomeSensorsMotionValues','open|on|motion'));
-    push @tampread,$sab;
-    if (ReadingsVal($sen,$mo,undef))
+    for my $sen (split /,/x,$motions)
     {
-      CommandAttr(undef,$sen.' HomeReadingMotion '.$mo) if ($mo ne 'state');
-      CommandAttr(undef,$sen.' HomeValueMotion '.$mv) if (!grep {$_ eq $mv} split /\|/x,'motion|open|on|1|true');
+      my ($mo,$sab) = split ' ',AttrVal($sen,'HomeReadings',$hsmr);
+      my $mv = AttrVal($sen,'HomeValues',$hsmv);
+      push @tampread,$sab;
+      if (defined ReadingsVal($sen,$mo,undef))
+      {
+        CommandAttr(undef,$sen.' HomeReadingMotion '.$mo) if ($mo ne 'state');
+        CommandAttr(undef,$sen.' HomeValueMotion '.$mv) if (!grep {$_ eq $mv} split /\|/x,'motion|open|on|1|true');
+      }
+      if (defined ReadingsVal($sen,$sab,undef))
+      {
+        push @tampers,$sen;
+        CommandAttr(undef,$sen.' HomeReadingTamper '.$sab) if ($sab ne 'sabotageError');
+        CommandAttr(undef,$sen.' HomeValueTamper '.$mv) if ($mv ne 'open|tilted|on|1|true');
+      }
+      CommandDeleteAttr(undef,$sen.' HomeValues') if (AttrVal($sen,'HomeValues',''));
+      CommandDeleteAttr(undef,$sen.' HomeReadings') if (AttrVal($sen,'HomeReadings',''));
     }
-    if (ReadingsVal($sen,$sab,undef))
-    {
-      push @tampers,$sen;
-      CommandAttr(undef,$sen.' HomeReadingTamper '.$sab) if ($sab ne 'sabotageError');
-      CommandAttr(undef,$sen.' HomeValueTamper '.$mv) if ($mv ne 'open|tilted|on');
-    }
-    CommandDeleteAttr(undef,$sen.' HomeValues') if (AttrVal($sen,'HomeValues',undef));
-    CommandDeleteAttr(undef,$sen.' HomeReadings') if (AttrVal($sen,'HomeReadings',undef));
   }
+  CommandDeleteAttr(undef,$name.' HomeSensorsMotionReadings') if ($hsmr);
+  CommandDeleteAttr(undef,$name.' HomeSensorsMotionValues') if ($hsmv);
   if (@tampers)
   {
     CommandAttr(undef,$name.' HomeSensorsTamper '.join(',',uniq sort @tampers)) if (!AttrVal($name,'HomeSensorsTamper',undef));
     @tampread = uniq @tampread;
-    CommandAttr(undef,$name.' HomeSensorsTamperReading '.$tampread[0]) if (int(@tampread)==1 && !grep {$_ eq $tampread[0]} split /\|/x,'tampared|open|on|yes|1|true');
-  }
-  my $hsbr = AttrVal($name,'HomeSensorsBatteryReading','');
-  if ($hsbr)
-  {
-    for (devspec2array($hash->{SENSORSBATTERY}))
+    for my $sen (@tampers)
     {
-      CommandAttr(undef,"$_ HomeReadingBattery $hsbr");
+      CommandAttr(undef,$sen.' HomeTamperReading '.$tampread[0]) if (int(@tampread)==1 && !AttrVal($sen,'HomeTamperReading','') && !grep {$sen eq $tampread[0]} split /\|/x,'tampared|open|on|yes|1|true');
+    }
+  }
+  my $batteries = InternalVal($name,'SENSORSBATTERY','');
+  my $hsbr = AttrVal($name,'HomeSensorsBatteryReading','battery');
+  if ($batteries && $hsbr ne 'battery')
+  {
+    for my $sen (split ',',$batteries)
+    {
+      CommandAttr(undef,"$sen HomeReadingBattery $hsbr");
     }
     CommandDeleteAttr(undef,$name.' HomeSensorsBatteryReading');
-  }
-  if (AttrVal($name,'HomeSensorsContactReadings',undef))
-  {
-    CommandAttr(undef,$name.' HomeSensorsContactReading '.(split ' ',AttrVal($name,'HomeSensorsContactReadings',''))[0]);
-    CommandDeleteAttr(undef,$name.' HomeSensorsContactReadings');
-  }
-  if (AttrVal($name,'HomeSensorsMotionReadings',undef))
-  {
-    CommandAttr(undef,$name.' HomeSensorsMotionReading '.(split ' ',AttrVal($name,'HomeSensorsMotionReadings',''))[0]);
-    CommandDeleteAttr(undef,$name.' HomeSensorsMotionReadings');
   }
   my $pe = AttrCheck($hash,'HomeSensorsPowerEnergy');
   if ($pe)
   {
     my ($pr,$er) = split ' ',AttrVal($name,'HomeSensorsPowerEnergyReadings','power energy');
     my @sensors;
-    for my $s (devspec2array($pe))
+    for my $sen (devspec2array($pe))
     {
-      next unless (ID($s,undef,$pr) && ID($s,undef,$er));
-      push @sensors,$s;
+      next unless (ID($sen,undef,$pr) && ID($sen,undef,$er));
+      push @sensors,$sen;
+      CommandAttr(undef,$sen.' HomeReadingEnergy '.$er) if ($er ne 'energy');
+      CommandAttr(undef,$sen.' HomeReadingPower '.$pr) if ($pr ne 'power');
     }
     my $list = join(',',uniq sort @sensors);
     CommandAttr(undef,$name.' HomeSensorsEnergy '.$list);
-    CommandAttr(undef,$name.' HomeSensorsEnergyReading '.$er) if ($er ne 'energy');
     CommandAttr(undef,$name.' HomeSensorsPower '.$list);
-    CommandAttr(undef,$name.' HomeSensorsPowerReading '.$pr) if ($pr ne 'power');
     CommandDeleteAttr(undef,$name.' HomeSensorsPowerEnergy');
-    CommandDeleteAttr(undef,$name.' HomeSensorsPowerEnergyReadings') if (AttrVal($name,'HomeSensorsPowerEnergyReadings',undef));
+    CommandDeleteAttr(undef,$name.' HomeSensorsPowerEnergyReadings') if (AttrVal($name,'HomeSensorsPowerEnergyReadings',''));
   }
   if (AttrVal($name,'HomeYahooWeatherDevice',undef))
   {
@@ -316,10 +326,28 @@ sub migrate
     CommandAttr(undef,$name.' HomeTextNoSmokeSmoke '.AttrVal($name,'HomeTextNosmokeSmoke',undef));
     CommandDeleteAttr(undef,$name.' HomeTextNosmokeSmoke');
   }
-  if (AttrVal($name,'HomeSensorsSmokeValue',undef))
+  my $smokes = InternalVal($name,'SENSORSSMOKE','');
+  if ($smokes)
   {
-    CommandAttr(undef,$name.' HomeSensorsSmokeValues '.AttrVal($name,'HomeSensorsSmokeValue',undef));
-    CommandDeleteAttr(undef,$name.' HomeSensorsSmokeValue');
+    my $hssr = AttrVal($name,'HomeSensorsSmokeReading','');
+    my $hssv = AttrVal($name,'HomeSensorsSmokeValue','');
+    for my $sen ($smokes)
+    {
+      CommandAttr(undef,$sen.' HomeReadingSmoke '.$hssr) if ($hssr && $hssr ne 'state' && !AttrVal($sen,'HomeReadingSmoke',''));
+      CommandAttr(undef,$sen.' HomeValueSmoke '.$hssv) if ($hssv && $hssv ne 'smoke|open|on|yes|1|true' && !AttrVal($sen,'HomeValueSmoke',''));
+    }
+    CommandDeleteAttr(undef,$name.' HomeSensorsSmokeReading') if ($hssr);
+    CommandDeleteAttr(undef,$name.' HomeSensorsSmokeValue') if ($hssv);
+  }
+  my $lights = InternalVal($name,'SENSORSLIGHT','');
+  my $hslr = AttrVal($name,'HomeSensorsLuminanceReading','luminance');
+  if ($lights && $hslr ne 'luminance')
+  {
+    for my $sen (split ',',$lights)
+    {
+      CommandAttr(undef,$sen.' HomeReadingLuminance '.$hslr) if (!AttrVal($sen,'HomeReadingLuminance',''));
+    }
+    CommandDeleteAttr(undef,$name.' HomeSensorsLuminanceReading') if ($hslr);
   }
   if (AttrVal($name,'HomeSensorWindspeed',undef))
   {
@@ -656,7 +684,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSCONTACT',''))
       {
-        my $read = AttrVal($devname,'HomeReadingContact',AttrVal($name,'HomeSensorsContactReading','state'));
+        my $read = AttrVal($devname,'HomeReadingContact','state');
         if (grep {/^$read:\s(.+)$/} @{$events})
         {
           for my $evt (@{$events})
@@ -670,7 +698,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSENERGY',''))
       {
-        my $read = AttrVal($devname,'HomeReadingEnergy',AttrVal($name,'HomeSensorsEnergyReading','energy'));
+        my $read = AttrVal($devname,'HomeReadingEnergy','energy');
         for my $evt (@{$events})
         {
           next unless ($evt =~ /^$read:\s(.+)$/);
@@ -681,7 +709,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSLIGHT',''))
       {
-        my $read = AttrVal($devname,'HomeReadingLuminance',AttrVal($name,'HomeSensorsLuminanceReading','luminance'));
+        my $read = AttrVal($devname,'HomeReadingLuminance','luminance');
         for my $evt (@{$events})
         {
           next unless ($evt =~ /^$read:\s(.+)$/);
@@ -692,7 +720,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSMOTION',''))
       {
-        my $read = AttrVal($devname,'HomeReadingMotion',AttrVal($name,'HomeSensorsMotionReading','state'));
+        my $read = AttrVal($devname,'HomeReadingMotion','state');
         if (grep {/^$read:\s.+$/} @{$events})
         {
           for my $v (@{$events})
@@ -706,7 +734,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSPOWER',''))
       {
-        my $read = AttrVal($devname,'HomeReadingPower',AttrVal($name,'HomeSensorsPowerReading','power'));
+        my $read = AttrVal($devname,'HomeReadingPower','power');
         for my $evt (@{$events})
         {
           next unless ($evt =~ /^$read:\s(.*)$/);
@@ -717,7 +745,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSSMOKE',''))
       {
-        my $read = AttrVal($devname,'HomeReadingSmoke',AttrVal($name,'HomeSensorsSmokeReading','state'));
+        my $read = AttrVal($devname,'HomeReadingSmoke','state');
         for my $evt (@{$events})
         {
           next unless ($evt =~ /^$read:\s(.+)$/);
@@ -728,7 +756,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSTAMPER',''))
       {
-        my $read = AttrVal($devname,'HomeReadingTamper',AttrVal($name,'HomeSensorsTamperReading','sabotageError'));
+        my $read = AttrVal($devname,'HomeReadingTamper','sabotageError');
         for my $evt (@{$events})
         {
           next unless ($evt =~ /^$read:\s(.*)$/);
@@ -739,7 +767,7 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSWATER',''))
       {
-        my $read = AttrVal($devname,'HomeReadingWater',AttrVal($name,'HomeSensorsWaterReading','state'));
+        my $read = AttrVal($devname,'HomeReadingWater','state');
         for my $evt (@{$events})
         {
           next unless ($evt =~ /^$read:\s(.*)$/);
@@ -1730,21 +1758,13 @@ sub AttrList
     'HomeSensorsBattery:textField',
     'HomeSensorsBatteryTypes:textField',
     'HomeSensorsContact:textField',
-    'HomeSensorsContactReading:textField',
     'HomeSensorsLuminance:textField',
-    'HomeSensorsLuminanceReading:textField',
     'HomeSensorsMotion:textField',
-    'HomeSensorsMotionReading:textField',
     'HomeSensorsEnergy:textField',
-    'HomeSensorsEnergyReading:textField',
     'HomeSensorsPower:textField',
-    'HomeSensorsPowerReading:textField',
     'HomeSensorsSmoke:textField',
-    'HomeSensorsSmokeReading:textField',
     'HomeSensorsTamper:textField',
-    'HomeSensorsTamperReading:textField',
     'HomeSensorsWater:textField',
-    'HomeSensorsWaterReading:textField',
     'HomeSpecialLocations:textField',
     'HomeSpecialModes:textField',
     'HomeTextAndAreIs:textField',
@@ -1782,7 +1802,6 @@ sub AttrList
     push @attribs,'HomeCMDalarmSmoke';
     push @attribs,'HomeCMDalarmSmoke-on';
     push @attribs,'HomeCMDalarmSmoke-off';
-    push @attribs,'HomeSensorsSmokeValues:textField';
     push @attribs,'HomeTextNoSmokeSmoke:textField';
   }
   if ($hash->{SENSORSTAMPER})
@@ -1790,7 +1809,6 @@ sub AttrList
     push @attribs,'HomeCMDalarmTampered';
     push @attribs,'HomeCMDalarmTampered-on';
     push @attribs,'HomeCMDalarmTampered-off';
-    push @attribs,'HomeSensorsTamperValues:textField';
     push @attribs,'HomeTextNoTamperTamper:textField';
   }
   if ($hash->{SENSORSBATTERY})
@@ -1811,7 +1829,6 @@ sub AttrList
     push @attribs,'HomeCMDcontactOpenWarning1';
     push @attribs,'HomeCMDcontactOpenWarning2';
     push @attribs,'HomeCMDcontactOpenWarningLast';
-    push @attribs,'HomeSensorsContactValues:textField';
     push @attribs,'HomeSensorsContactOpenTimeDividers:textField';
     push @attribs,'HomeSensorsContactOpenTimeMin:textField';
     push @attribs,'HomeSensorsContactOpenTimes:textField';
@@ -1840,7 +1857,6 @@ sub AttrList
     push @attribs,'HomeCMDmotion';
     push @attribs,'HomeCMDmotion-on';
     push @attribs,'HomeCMDmotion-off';
-    push @attribs,'HomeSensorsMotionValues:textField';
     push @attribs,'HomeTextClosedOpen:textField';
   }
   if (AttrVal($name,'HomeTwilightDevice',undef))
@@ -1876,7 +1892,6 @@ sub AttrList
     push @attribs,'HomeCMDalarmWater';
     push @attribs,'HomeCMDalarmWater-on';
     push @attribs,'HomeCMDalarmWater-off';
-    push @attribs,'HomeSensorsWaterValues:textField';
     push @attribs,'HomeTextNoWaterWater:textField';
   }
   if (AttrVal($name,'HomeUWZ',undef))
@@ -2143,20 +2158,6 @@ sub Attr
       return $text if (!CheckIfIsValidDevspec($name,"TYPE=$attr_value",'presence'));
       updateInternals($hash);
     }
-    elsif ($attr_name =~ /^HomeSensors(Contact|Battery|Energy|Luminance|Motion|Power|Smoke|Tamper|Water)Reading$/x)
-    {
-      $text = $langDE?
-        "Ungültiger Wert $attr_value für Attribut $attr_name. Es wird ein einzelnes Reading benötigt! z.B. state":
-        "Invalid value $attr_value for attribute $attr_name. You have to provide one reading, e.g. state";
-      return $text if ($attr_value !~ /^[\w\-\.]+$/x);
-    }
-    elsif ($attr_name =~ /^HomeSensors(Contact|Motion|Smoke|Tamper|Water)Values$/x)
-    {
-      $text = $langDE?
-        "Ungültiger Wert $attr_value für Attribut $attr_name. Es wird wenigstens ein Wert oder mehrere Pipe separierte Werte benötigt! z.B. open|tilted|on":
-        "Invalid value $attr_value for attribute $attr_name. You have to provide at least one value or more values pipe separated, e.g. open|tilted|on";
-      return $text if ($attr_value !~ /^[\w\-\+\*\.\(\)]+(\|[\w\-\+\*\.\(\)]+){0,}$/xi);
-    }
     elsif ($attr_name eq "HomeSensorsBatteryTypes")
     {
       $text = $langDE?
@@ -2391,20 +2392,11 @@ sub Attr
     }
     elsif ($attr_name eq 'HomeSensorsLuminance' && $init_done)
     {
-      my $read = AttrVal($name,'HomeSensorsLuminanceReading','luminance');
       $text = $langDE?
-        "$attr_value muss ein gültiges Gerät mit $read Reading sein!":
-        "$attr_name must be a valid device with $read reading!";
-      return $text if (!CheckIfIsValidDevspec($name,$attr_value,$read));
+        "$attr_value muss ein gültiger devspec sein!":
+        "$attr_name must be a valid devspec!";
+      return $text if (!CheckIfIsValidDevspec($name,$attr_value));
       updateInternals($hash);
-    }
-    elsif ($attr_name =~ /^HomeSensors(Battery|Contact|Energy|Luminance|Motion|Power|Smoke|Tamper|Water)Reading$/x && $init_done)
-    {
-      $text = $langDE?
-        "$attr_name muss ein einzelnes gültiges Reading sein!":
-        "$attr_name must be a single valid reading!";
-      return $text if ($attr_value !~ /^([\w\-\.]+)$/x);
-      updateInternals($hash) if ($attr_value_old ne $attr_value);
     }
     elsif ($attr_name =~ /^HomeSensor(Energy|Power)Divider$/x && $init_done)
     {
@@ -2536,7 +2528,7 @@ sub Attr
     {
       AttrList($hash);
     }
-    elsif ($attr_name =~ /^(HomeUWZ|HomeSensorsLuminance|HomeSensorsLuminanceReading|HomeSensorsPowerEnergyReadings)$/x)
+    elsif ($attr_name =~ /^(HomeUWZ|HomeSensorsLuminance)$/x)
     {
       CommandDeleteReading(undef,"$name uwz.*") if ($attr_name eq 'HomeUWZ');
       CommandDeleteReading(undef,"$name .*luminance.*") if ($attr_name eq 'HomeSensorsLuminance');
@@ -3189,7 +3181,7 @@ sub Luminance
   {
     next if (IsDis($name,$_));
     push @sensorsa,$_;
-    my $read = AttrVal($_,'HomeReadingLuminance',AttrVal($name,'HomeSensorsLuminanceReading','luminance'));
+    my $read = AttrVal($_,'HomeReadingLuminance','luminance');
     my $val = ReadingsNum($_,$read,0);
     next unless ($val > 0);
     my $div = AttrVal($_,'HomeDividerLuminance',1);
@@ -3230,8 +3222,8 @@ sub TriggerState
     for my $sensor (split /,/,$contacts)
     {
       next if (IsDis($name,$sensor));
-      my $read = AttrVal($sensor,'HomeReadingContact',AttrVal($name,'HomeSensorsContactReading','state'));
-      my $val = AttrVal($sensor,'HomeValueContact',AttrVal($name,'HomeSensorsContactValues','open|tilted|on|1|true'));
+      my $read = AttrVal($sensor,'HomeReadingContact','state');
+      my $val = AttrVal($sensor,'HomeValueContact','open|tilted|on|1|true');
       my $state = ReadingsVal($sensor,$read,'');
       my $amodea = AttrVal($sensor,'HomeModeAlarmActive','-');
       my $kind = AttrVal($sensor,'HomeContactType','window');
@@ -3280,8 +3272,8 @@ sub TriggerState
     for my $sensor (split /,/,$motions)
     {
       next if (IsDis($name,$sensor));
-      my $read = AttrVal($sensor,'HomeReadingMotion',AttrVal($name,'HomeSensorsMotionReading','state'));
-      my $val = AttrVal($sensor,'HomeValueMotion',AttrVal($name,'HomeSensorsMotionValues','open|on|motion|1|true'));
+      my $read = AttrVal($sensor,'HomeReadingMotion','state');
+      my $val = AttrVal($sensor,'HomeValueMotion','open|on|motion|1|true');
       my $amodea = AttrVal($sensor,'HomeModeAlarmActive','-');
       my $state = ReadingsVal($sensor,$read,'');
       my $kind = AttrVal($sensor,'HomeSensorLocation','inside');
@@ -3414,8 +3406,8 @@ sub ContactOpenWarning
     my $otr = ReadingsNum($sen,'.'.$name.'-HomeOpenTrigger',0);
     my $dif = $omt-$otr;
     next if ($dif > $omt+1);
-    my $sta = ReadingsVal($sen,AttrVal($sen,'HomeReadingContact',AttrVal($name,'HomeSensorsContactReading','state')),'');
-    my $reg = AttrVal($sen,'HomeValueContact',AttrVal($name,'HomeSensorsContactValues','open|tilted|on|1|true'));
+    my $sta = ReadingsVal($sen,AttrVal($sen,'HomeReadingContact','state'),'');
+    my $reg = AttrVal($sen,'HomeValueContact','open|tilted|on|1|true');
     next if ($sta !~ /^$reg$/);
     my $dtmode = AttrVal($sen,'HomeOpenDontTriggerModes','');
     my $dtres = AttrVal($sen,'HomeOpenDontTriggerModesResidents','');
@@ -4527,11 +4519,11 @@ sub Details
         $html .= '<td>';
         $html .= FW_select('HomeContactType','HomeContactType',\@hct,AttrVal($s,'HomeContactType',''),'dropdown','');
         $html .= '</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingContact',10,'',AttrVal($s,'HomeReadingContact',''),AttrVal($name,'HomeSensorsContactReading','state'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingContact',AttrVal($name,'HomeSensorsContactReading','state')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingContact',AttrVal($name,'HomeSensorsContactReading','state')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingContact',10,'',AttrVal($s,'HomeReadingContact',''),'state');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingContact','state'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingContact','state').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueContact',15,'',AttrVal($s,'HomeValueContact',''),AttrVal($name,'HomeSensorsContactValues','open|tilted|on')).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueContact',15,'',AttrVal($s,'HomeValueContact',''),'open|tilted|on|1|true')).'</td>';
         $html .= '</tr>';
         $c++;
       }
@@ -4576,9 +4568,9 @@ sub Details
         $html .= '<td><a href="/fhem?detail='.$s.'"><strong>'.$s.'</strong>';
         $html .= ' ('.$alias.')' if ($alias);
         $html .= '</a>'.FW_hidden('devname',$s).'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingEnergy',10,'',AttrVal($s,'HomeReadingEnergy',''),AttrVal($name,'HomeSensorsEnergyReading','energy'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingEnergy',AttrVal($name,'HomeSensorsEnergyReading','energy')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingEnergy',AttrVal($name,'HomeSensorsEnergyReading','energy')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingEnergy',10,'',AttrVal($s,'HomeReadingEnergy',''),'energy');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingEnergy','energy'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingEnergy','energy').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
         $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeDividerEnergy',5,'',AttrNum($s,'HomeDividerEnergy',''),AttrNum($name,'HomeSensorsEnergyDivider',1)).'</td>';
         $html .= '<td class="HOMEMODE_tac">';
@@ -4628,9 +4620,9 @@ sub Details
         $html .= '<td><a href="/fhem?detail='.$s.'"><strong>'.$s.'</strong>';
         $html .= ' ('.$alias.')' if ($alias);
         $html .= '</a>'.FW_hidden('devname',$s).'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingLuminance',10,'',AttrVal($s,'HomeReadingLuminance',''),AttrVal($name,'HomeSensorsLuminanceReading','luminance'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingLuminance',AttrVal($name,'HomeSensorsLuminanceReading','luminance')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingLuminance',AttrVal($name,'HomeSensorsLuminanceReading','luminance')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingLuminance',10,'',AttrVal($s,'HomeReadingLuminance',''),'luminance');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingLuminance','luminance'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingLuminance','luminance').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
         $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeDividerLuminance',5,'',AttrNum($s,'HomeDividerLuminance',''),AttrNum($name,'HomeSensorsLuminanceDivider',1)).'</td>';
         $html .= '</tr>';
@@ -4700,11 +4692,11 @@ sub Details
         $html .= '</td>';
         $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeAlarmDelay',3,'',AttrVal($s,'HomeAlarmDelay',''),AttrNum($name,'HomeSensorsAlarmDelay',0)).'</td>';
         $html .= '<td class="HOMEMODE_tac">'.FW_select("$s",'HomeSensorLocation',\@hml,AttrVal($s,'HomeSensorLocation',''),'dropdown','').'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingMotion',10,'',AttrVal($s,'HomeReadingMotion',''),AttrVal($name,'HomeSensorsMotionReading','state'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingMotion',AttrVal($name,'HomeSensorsMotionReading','state')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingMotion',AttrVal($name,'HomeSensorsMotionReading','state')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingMotion',10,'',AttrVal($s,'HomeReadingMotion',''),'state');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingMotion','state'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingMotion','state').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueMotion',15,'',AttrVal($s,'HomeValueMotion',''),AttrVal($name,'HomeSensorsMotionValues','motion|open|on|1|true')).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueMotion',15,'',AttrVal($s,'HomeValueMotion',''),'open|on|motion|1|true').'</td>';
         $html .= '</tr>';
         $c++;
       }
@@ -4749,9 +4741,9 @@ sub Details
         $html .= '<td><a href="/fhem?detail='.$s.'"><strong>'.$s.'</strong>';
         $html .= ' ('.$alias.')' if ($alias);
         $html .= '</a>'.FW_hidden('devname',$s).'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingPower',10,'',AttrVal($s,'HomeReadingPower',''),AttrVal($name,'HomeSensorsPowerReading','power'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingPower',AttrVal($name,'HomeSensorsPowerReading','power')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingPower',AttrVal($name,'HomeSensorsPowerReading','power')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingPower',10,'',AttrVal($s,'HomeReadingPower',''),'power');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingPower','power'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingPower','power').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
         $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeDividerPower',5,'',AttrNum($s,'HomeDividerPower',''),AttrNum($name,'HomeSensorsPowerDivider',1)).'</td>';
         $html .= '</td>';
@@ -4800,11 +4792,11 @@ sub Details
         $html .= '<td><a href="/fhem?detail='.$s.'"><strong>'.$s.'</strong>';
         $html .= ' ('.$alias.')' if ($alias);
         $html .= '</a>'.FW_hidden('devname',$s).'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingSmoke',10,'',AttrVal($s,'HomeReadingSmoke',''),AttrVal($name,'HomeSensorsSmokeReading','state'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingSmoke',AttrVal($name,'HomeSensorsSmokeReading','state')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingSmoke',AttrVal($name,'HomeSensorsSmokeReading','state')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingSmoke',10,'',AttrVal($s,'HomeReadingSmoke',''),'state');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingSmoke','state'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingSmoke','state').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueSmoke',15,'',AttrVal($s,'HomeValueSmoke',''),AttrVal($name,'HomeSensorsSmokeValues','smoke|open|on|yes|1|true')).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueSmoke',15,'',AttrVal($s,'HomeValueSmoke',''),'smoke|open|on|yes|1|true').'</td>';
         $html .= '</tr>';
         $c++;
       }
@@ -4845,11 +4837,11 @@ sub Details
         $html .= '<td><a href="/fhem?detail='.$s.'"><strong>'.$s.'</strong>';
         $html .= ' ('.$alias.')' if ($alias);
         $html .= '</a>'.FW_hidden('devname',$s).'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingTamper',10,'',AttrVal($s,'HomeReadingTamper',''),AttrVal($name,'HomeSensorsTamperReading','sabotageError'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingTamper',AttrVal($name,'HomeSensorsTamperReading','sabotageError')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingTamper',AttrVal($name,'HomeSensorsTamperReading','sabotageError')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingTamper',10,'',AttrVal($s,'HomeReadingTamper',''),'sabotageError');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingTamper','sabotageError'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingTamper','sabotageError').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueTamper',15,'',AttrVal($s,'HomeValueTamper',''),AttrVal($name,'HomeSensorsTamperValues','tamper|open|on|yes|1|true')).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueTamper',15,'',AttrVal($s,'HomeValueTamper',''),'tamper|open|on|yes|1|true').'</td>';
         $html .= '</tr>';
         $c++;
       }
@@ -4890,11 +4882,11 @@ sub Details
         $html .= '<td><a href="/fhem?detail='.$s.'"><strong>'.$s.'</strong>';
         $html .= ' ('.$alias.')' if ($alias);
         $html .= '</a>'.FW_hidden('devname',$s).'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingWater',10,'',AttrVal($s,'HomeReadingWater',''),AttrVal($name,'HomeSensorsWaterReading','state'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingWater',AttrVal($name,'HomeSensorsWaterReading','state')),undef);
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingWater',AttrVal($name,'HomeSensorsWaterReading','state')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingWater',10,'',AttrVal($s,'HomeReadingWater',''),'state');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingWater','state'),undef);
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingWater','state').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueWater',15,'',AttrVal($s,'HomeValueWater',''),AttrVal($name,'HomeSensorsWaterValues','water|open|on|yes|1|true')).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueWater',15,'',AttrVal($s,'HomeValueWater',''),'water|open|on|yes|1|true').'</td>';
         $html .= '</tr>';
         $c++;
       }
@@ -5599,13 +5591,11 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingContact'>HomeReadingContact</a><br>
           single word of name of the reading indicating the contact state<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsContactReading of the HOMEMODE device<br>
           default: state
         </li>
         <li>
           <a id='HOMEMODE-attr-HomeValueContact'>HomeValueContact</a><br>
           regex of open and tilted values for contact sensors<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsContactValues of the HOMEMODE device<br>
           default: open|tilted|on
         </li>
         <li>
@@ -5626,18 +5616,6 @@ sub inform
           default:
         </li>
       </ul>
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsContactReading'>HomeSensorsContactReading</a><br>
-      single word of name of the reading indicating the contact state<br>
-      this is the global setting, you can also set these readings in each contact sensor individually in attribute HomeReadingContact once they are added to the HOMEMODE device<br>
-      default: state
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsContactValues'>HomeSensorsContactValues</a><br>
-      regex of open and tilted values for contact sensors<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeValueContact once they are added to the HOMEMODE device<br>
-      default: open|tilted|on|1|true
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsContactOpenTimeDividers'>HomeSensorsContactOpenTimeDividers</a><br>
@@ -5682,13 +5660,11 @@ sub inform
       <a id='HOMEMODE-attr-HomeSensorsLuminance'>HomeSensorsLuminance</a><br>
       devspec of sensors with luminance measurement capabilities<br>
       these devices will be used for total luminance calculations<br>
-      please set the corresponding reading for luminance in attribute HomeSensorsLuminanceReading (if different to luminance) before applying sensors here<br>
       each applied luminance sensor will get the following attributes, attributes will be removed after removing the luminance sensors from the HOMEMODE device.<br>
       <ul>
         <li>
           <a id='HOMEMODE-attr-HomeReadingLuminance'>HomeReadingLuminance</a><br>
           single word of name of the reading indicating the contact state<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsLuminanceReading of the HOMEMODE device<br>
           default: state sabotageError
         </li>
         <li>
@@ -5700,11 +5676,6 @@ sub inform
       </ul>
     </li>
     <li>
-      <a id='HOMEMODE-attr-HomeSensorsLuminanceReading'>HomeSensorsLuminanceReading</a><br>
-      single word of name of the reading indicating the contact state<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeReadingLuminance once they are added to the HOMEMODE device<br>
-      default: luminance
-    </li>
       <a id='HOMEMODE-attr-HomeSensorsLuminanceDivider'>HomeSensorsLuminanceDivider</a><br>
       divider for proper calculation of total luminance<br>
       this is the global setting, you can also set these values in each contact sensor individually in attribute HomeDividerLuminance once they are added to the HOMEMODE device<br>
@@ -5730,28 +5701,14 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingMotion'>HomeReadingMotion</a><br>
           single word of name of the reading indicating the motion state<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsMotionReading of the HOMEMODE device<br>
           default: state sabotageError
         </li>
         <li>
           <a id='HOMEMODE-attr-HomeValueMotion'>HomeValueMotion</a><br>
           regex of open values for the motion sensor<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsMotionValues of the HOMEMODE device<br>
           default: open|on|motion|1|true
         </li>
       </ul>
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsMotionReading'>HomeSensorsMotionReading</a><br>
-      single word of name of the reading indicating the motion state<br>
-      this is the global setting, you can also set these in each motion sensor individually in attribute HomeReadingMotion once they are added to the HOMEMODE device<br>
-      default: state
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsMotionValues'>HomeSensorsMotionValues</a><br>
-      regex of open and tamper values for motion sensors<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeValueMotion once they are added to the HOMEMODE device<br>
-      default: open|on|motion|1|true
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsEnergy'>HomeSensorsEnergy</a><br>
@@ -5773,7 +5730,6 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingEnergy'>HomeReadingEnergy</a><br>
           single word of name of the reading indicating the energy value<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsEnergyReading of the HOMEMODE device<br>
           default: energy
         </li>
       </ul>
@@ -5782,11 +5738,6 @@ sub inform
       <a id='HOMEMODE-attr-HomeSensorsEnergyDivider'>HomeSensorsEnergyDivider</a><br>
       divider for proper calculation of total energy consumption<br>
       default: 1
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsEnergyReading'>HomeSensorsEnergyReading</a><br>
-      single word of name of the reading indicating the energy value<br>
-      default: energy
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsPower'>HomeSensorsPower</a><br>
@@ -5808,7 +5759,6 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingPower'>HomeReadingPower</a><br>
           single word of name of the reading indicating the power value<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsPowerReading of the HOMEMODE device<br>
           default: state sabotageError
         </li>
       </ul>
@@ -5820,40 +5770,20 @@ sub inform
       default: 1
     </li>
     <li>
-      <a id='HOMEMODE-attr-HomeSensorsPowerReading'>HomeSensorsPowerReading</a><br>
-      single word of name of the reading indicating the energy value<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeReadingPower once they are added to the HOMEMODE device<br>
-      default: power
-    </li>
-    <li>
       <a id='HOMEMODE-attr-HomeSensorsSmoke'>HomeSensorsSmoke</a><br>
       devspec of smoke sensors<br>
       <ul>
         <li>
           <a id='HOMEMODE-attr-HomeReadingSmoke'>HomeReadingSmoke</a><br>
           single word of name of the reading indicating the smoke state<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsSmokeReading of the HOMEMODE device<br>
-          default: state sabotageError
+          default: state
         </li>
         <li>
           <a id='HOMEMODE-attr-HomeValueSmoke'>HomeValueSmoke</a><br>
           regex of on values for the smoke sensor<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsSmokeValues of the HOMEMODE device<br>
           default: smoke|open|on|yes|1|true
         </li>
       </ul>
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsSmokeReading'>HomeSensorsSmokeReading</a><br>
-      single word of name of the reading indicating the smoke state<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeReadingSmoke once they are added to the HOMEMODE device<br>
-      default: state
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsSmokeValues'>HomeSensorsSmokeValues</a><br>
-      regex of on values for smoke sensors<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeValueSmoke once they are added to the HOMEMODE device<br>
-      default: on
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsTamper'>HomeSensorsTamper</a><br>
@@ -5862,28 +5792,14 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingTamper'>HomeReadingTamper</a><br>
           single word of name of the reading indicating the tamper state<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsTamperReading of the HOMEMODE device<br>
           default: state sabotageError
         </li>
         <li>
           <a id='HOMEMODE-attr-HomeValueTamper'>HomeValueTamper</a><br>
           regex of on values for the tamper sensor<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsTamperValues of the HOMEMODE device<br>
           default: tamper|open|on|yes|1|true
         </li>
       </ul>
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsTamperReading'>HomeSensorsTamperReading</a><br>
-      single word of name of the reading indicating the tamper state<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeReadingTamper once they are added to the HOMEMODE device<br>
-      default: state
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsTamperValues'>HomeSensorsTamperValues</a><br>
-      regex of on values for smoke sensors<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeValueTamper once they are added to the HOMEMODE device<br>
-      default: tamper|open|on|yes|1|true
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsWater'>HomeSensorsWater</a><br>
@@ -5892,28 +5808,14 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingWater'>HomeReadingWater</a><br>
           single word of name of the reading indicating the water state<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsWaterReading of the HOMEMODE device<br>
           default: state sabotageError
         </li>
         <li>
           <a id='HOMEMODE-attr-HomeValueWater'>HomeValueWater</a><br>
           regex of on values for the water sensor<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsWaterValues of the HOMEMODE device<br>
           default: water|open|on|yes|1|true
         </li>
       </ul>
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsWaterReading'>HomeSensorsWaterReading</a><br>
-      single word of name of the reading indicating the water state<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeReadingWater once they are added to the HOMEMODE device<br>
-      default: state
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsWaterValues'>HomeSensorsWaterValues</a><br>
-      regex of on values for water sensors<br>
-      this is the global setting, you can also set these values in each contact sensor individually in attribute HomeValueWater once they are added to the HOMEMODE device<br>
-      default: water|open|on|yes|1|true
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSpecialLocations'>HomeSpecialLocations</a><br>

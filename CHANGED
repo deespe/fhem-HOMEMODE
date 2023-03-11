@@ -25,7 +25,7 @@ v2.0.0
   - changed:  unified attributes HomeEventsHolidayDevices and HomeEventsCalendarDevices into HomeEventsDevices
   - changed:  lots of minor changes
   - merged:   HOMEMODE 2.0 branch manually
-  - removed:  attribute HomeSensorsBatteryReading
+  - removed:  attributes HomeSensorsBatteryReading, HomeSensorsContactReadings, HomeSensorsContactValues, HomeSensorsPowerReading, HomeSensorsEnergyReading, HomeSensorsSmokeReading, HomeSensorsSmokeValue, HomeSensorsLuminanceReading, HomeSensorsMotionReading, HomeSensorsMotionValues, HomeSensorsWaterReading, HomeSensorsWaterValues
   - removed:  greps on arrays where possible and instead use uniq on the final array
   - removed:  prototypes of functions
   - removed:  use POSIX
