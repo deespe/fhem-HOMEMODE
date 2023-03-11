@@ -636,6 +636,21 @@ sub Notify
           last;
         }
       }
+      if (AttrVal($name,'HomeSensorRain',undef) && $devname eq (split /:/x,AttrVal($name,'HomeSensorRain',''))[0])
+      {
+        my $read = (split /:/x,AttrVal($name,'HomeSensorRain',''))[1];
+        if (grep {/^$read:\s(.+)$/} @{$events})
+        {
+          for my $evt (@{$events})
+          {
+            next unless ($evt =~ /^$read:\s(.+)$/);
+            my $val = (split ' ',$1)[0];
+            readingsSingleUpdate($hash,'rainLevel',$val,1);
+            ReadingTrend($hash,'rainLevel',$val);
+            last;
+          }
+        }
+      }
       if (AttrVal($name,'HomeSensorWind',undef) && $devname eq (split /:/x,AttrVal($name,'HomeSensorWind',''))[0])
       {
         my $read = (split /:/x,AttrVal($name,'HomeSensorWind',''))[1];
@@ -1751,8 +1766,9 @@ sub AttrList
     'HomeResidentCmdDelay:textField',
     'HomeSeasons',
     'HomeSensorAirpressure:textField',
-    'HomeSensorHumidityOutside',
-    'HomeSensorTemperatureOutside',
+    'HomeSensorHumidityOutside:textField',
+    'HomeSensorRain:textField',
+    'HomeSensorTemperatureOutside:textField',
     'HomeSensorWind:textField',
     'HomeSensorsAlarmDelay:textField',
     'HomeSensorsBattery:textField',
@@ -2390,14 +2406,6 @@ sub Attr
       return "$attr_value must be a valid device of TYPE UWZ!" if (!CheckIfIsValidDevspec($name,"$attr_value:FILTER=TYPE=UWZ"));
       updateInternals($hash) if ($attr_value_old ne $attr_value);
     }
-    elsif ($attr_name eq 'HomeSensorsLuminance' && $init_done)
-    {
-      $text = $langDE?
-        "$attr_value muss ein gültiger devspec sein!":
-        "$attr_name must be a valid devspec!";
-      return $text if (!CheckIfIsValidDevspec($name,$attr_value));
-      updateInternals($hash);
-    }
     elsif ($attr_name =~ /^HomeSensor(Energy|Power)Divider$/x && $init_done)
     {
       $text = $langDE?
@@ -2405,7 +2413,7 @@ sub Attr
         "$attr_name must be a single number, but not 0, p.e. 1000 or 0.001!";
       return $text if ($attr_value !~ /^(?!0)\d+(\.\d+)?$/x || !CheckIfIsValidDevspec($name,$1,$2));
     }
-    elsif ($attr_name =~ /^HomeSensorAirpressure|HomeSensorWind$/x && $init_done)
+    elsif ($attr_name =~ /^HomeSensor(Airpressure|Wind|Rain)$/x && $init_done)
     {
       $text = $langDE?
         "$attr_name muss ein einzelnes gültiges Gerät und Reading sein (Sensor:Reading)!":
@@ -2463,9 +2471,10 @@ sub Attr
     {
       $langDE = AttrVal('global','language','DE') ? 1 : undef;
     }
-    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEventsDevices|HomeSensorAirpressure|HomeSensorWind|HomeSensorsBattery)$/x)
+    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEventsDevices|HomeSensorAirpressure|HomeSensorWind|HomeSensorRain|HomeSensorsBattery)$/x)
     {
-      CommandDeleteReading(undef,"$name event-.+") if ($attr_name =~ /^HomeEventsDevices$/x);
+      CommandDeleteReading(undef,"$name event.*") if ($attr_name eq 'HomeEventsDevices');
+      CommandDeleteReading(undef,"$name rain.*") if ($attr_name eq 'HomeSensorRain');
       CommandDeleteReading(undef,"$name battery.*|lastBatteryLow") if ($attr_name eq 'HomeSensorsBattery');
       updateInternals($hash);
     }
@@ -2487,7 +2496,12 @@ sub Attr
     }
     elsif ($attr_name eq 'HomeSensorsSmoke')
     {
-      CommandDeleteReading(undef,"$name alarmSmoke");
+      CommandDeleteReading(undef,"$name alarmSmoke.*");
+      updateInternals($hash);
+    }
+    elsif ($attr_name eq 'HomeSensorsWater')
+    {
+      CommandDeleteReading(undef,"$name alarmWater.*");
       updateInternals($hash);
     }
     elsif ($attr_name eq 'HomeSensorsEnergy')
@@ -3080,8 +3094,6 @@ sub addSensorsUserAttr
     if (grep {$_ eq $sensor} split /,/x,InternalVal($name,'SENSORSCONTACT',''))
     {
       push @list,'HomeContactType:doorinside,dooroutside,doormain,window';
-      # push @list,'HomeCMDcontactOpen:textField-long';
-      # push @list,'HomeCMDcontactClose:textField-long';
       push @list,'HomeOpenDontTriggerModes';
       push @list,'HomeOpenDontTriggerModesResidents';
       push @list,'HomeOpenMaxTrigger';
@@ -3278,12 +3290,12 @@ sub TriggerState
       my $state = ReadingsVal($sensor,$read,'');
       my $kind = AttrVal($sensor,'HomeSensorLocation','inside');
       next if (!$state);
-      if ($state =~ /^($val)$/x)
+      if ($state =~ /^$val$/x)
       {
         push @motionsOpen,$sensor;
         push @motionsInsideOpen,$sensor if ($kind eq 'inside');
         push @motionsOutsideOpen,$sensor if ($kind eq 'outside');
-        if ($amode =~ /^($amodea)$/x)
+        if ($amode =~ /^$amodea$/x)
         {
           push @alarmSensors,$sensor;
         }
@@ -4523,7 +4535,7 @@ sub Details
         my $val = ReadingsVal($s,AttrVal($s,'HomeReadingContact','state'),undef);
         $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingContact','state').'">'.(defined $val?$val:'--').'</span>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueContact',15,'',AttrVal($s,'HomeValueContact',''),'open|tilted|on|1|true')).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeValueContact',15,'',AttrVal($s,'HomeValueContact',''),'open|tilted|on|1|true').'</td>';
         $html .= '</tr>';
         $c++;
       }
@@ -5515,8 +5527,12 @@ sub inform
       main outside airpressure sensor
     </li>
     <li>
+      <a id='HOMEMODE-attr-HomeSensorRain'>HomeSensorRain</a><br>
+      main outside rain sensor
+    </li>
+    <li>
       <a id='HOMEMODE-attr-HomeSensorWind'>HomeSensorWind</a><br>
-      main outside wind speed sensor
+      main outside wind sensor
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsAlarmDelay'>HomeSensorsAlarmDelay</a><br>
@@ -6294,6 +6310,10 @@ sub inform
     <li>
       <a id='HOMEMODE-read-season'>season</a><br>
       current season as configured in HomeSeasons<br>
+    </li>
+    <li>
+      <a id='HOMEMODE-read-rainLevel'>rainLevel</a><br>
+      current rain level
     </li>
     <li>
       <a id='HOMEMODE-read-state'>state</a><br>
