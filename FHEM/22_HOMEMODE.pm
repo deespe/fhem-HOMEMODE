@@ -705,7 +705,7 @@ sub Notify
           for my $evt (@{$events})
           {
             next if ($evt !~ /^$read:\s(.+)$/);
-            TriggerState($hash,undef,undef,$devname);
+            TriggerState($name,undef,undef,$devname);
             inform($hash,"$devname.$read",$1);
             last;
           }
@@ -741,7 +741,7 @@ sub Notify
           for my $v (@{$events})
           {
             next if ($v !~ /^$read:\s(.+)$/);
-            TriggerState($hash,undef,undef,$devname);
+            TriggerState($name,undef,undef,$devname);
             inform($hash,"$devname.$read",$1);
             last;
           }
@@ -1112,7 +1112,7 @@ sub updateInternals
     AttrList($hash);
     return migrate($hash) if ($hash->{helper}{migrate});
     RESIDENTS($hash);
-    TriggerState($hash) if ($hash->{SENSORSCONTACT} || $hash->{SENSORSMOTION});
+    TriggerState($name) if ($hash->{SENSORSCONTACT} || $hash->{SENSORSMOTION});
     Luminance($hash) if ($hash->{SENSORSLIGHT});
     EnergyPower($hash,'Energy') if ($hash->{SENSORSENERGY});
     EnergyPower($hash,'Power') if ($hash->{SENSORSPOWER});
@@ -1167,7 +1167,7 @@ sub Get
       "$cmd benötigt ein Argument":
       "$cmd needs one argument!";
     return $text if (!$value);
-    TriggerState($hash,$cmd,$value);
+    TriggerState($name,$cmd,$value);
   }
   elsif ($cmd eq 'sensorsTampered')
   {
@@ -1376,17 +1376,7 @@ sub Set
     my $delay;
     if ($option =~ /^arm/x && AttrVal($name,'HomeModeAlarmArmDelay',0))
     {
-      my @delays = split ' ',AttrVal($name,'HomeModeAlarmArmDelay',0);
-      if (defined $delays[1])
-      {
-        $delay = $delays[0] if ($option eq 'armaway');
-        $delay = $delays[1] if ($option eq 'armnight');
-        $delay = $delays[2] if ($option eq 'armhome');
-      }
-      else
-      {
-        $delay = $delays[0];
-      }
+      $delay = returnDelay($option,split ' ',AttrVal($name,'HomeModeAlarmArmDelay',0));
     }
     if ($delay)
     {
@@ -1506,7 +1496,7 @@ sub set_modeAlarm
     readingsBulkUpdate($hash,'modeAlarm',$option);
     readingsBulkUpdateIfChanged($hash,'alarmState',$option);
     readingsEndUpdate($hash,1);
-    TriggerState($hash) if ($hash->{SENSORSCONTACT} || $hash->{SENSORSMOTION});
+    TriggerState($name) if ($hash->{SENSORSCONTACT} || $hash->{SENSORSMOTION});
     execCMDs($hash,serializeCMD($hash,@commands),$resident) if (@commands);
   }
   return;
@@ -2377,13 +2367,6 @@ sub Attr
         AttrList($hash);
       }
     }
-    elsif ($attr_name eq 'HomeModeAlarmArmDelay')
-    {
-      $text = $langDE?
-        "$attr_value für $attr_name muss eine einzelne Zahl sein für die Verzögerung in Sekunden oder 3 Leerzeichen separierte Zeiten in Sekunden für jeden modeAlarm individuell (Reihenfolge: armaway armnight armhome), höhster Wert ist 99999":
-        "$attr_value for $attr_name must be a single number for delay time in seconds or 3 space separated times in seconds for each modeAlarm individually (order: armaway armnight armhome), max. value is 99999";
-      return $text if ($attr_value !~ /^(\d{1,5})((\s\d{1,5})(\s\d{1,5}))?$/);
-    }
     elsif ($attr_name =~ /^(HomeTextAndAreIs|HomeTextTodayTomorrowAfterTomorrow|HomeTextRisingConstantFalling)$/x)
     {
       $text = $langDE?
@@ -2421,11 +2404,11 @@ sub Attr
       return $text if ($attr_value !~ /^([\w\.]+):([\w\-\.]+)$/x || !CheckIfIsValidDevspec($name,$1,$2));
       updateInternals($hash) if ($attr_value_old ne $attr_value);
     }
-    elsif ($attr_name eq 'HomeSensorsAlarmDelay')
+    elsif ($attr_name =~ /^Home(SensorsAlarmDelay|ModeAlarmArmDelay)$/)
     {
       $text = $langDE?
-        "$attr_name muss eine einzelne Zahl (in Sekunden) sein oder drei leerzeichengetrennte Zahlen (in Sekunden sein für jeden Alarm Modus individuell (armaway armhome armnight).":
-        "$attr_name must be a single number (in seconds) or three space separated numbers (in seconds)<br>for each alarm mode individually (armaway armhome armnight).";
+        "$attr_name muss eine einzelne Zahl (in Sekunden) sein oder drei leerzeichengetrennte Zahlen (in Sekunden sein für jeden Alarm Modus individuell (order: armaway armnight armhome).":
+        "$attr_name must be a single number (in seconds) or three space separated numbers (in seconds)<br>for each alarm mode individually (order: armaway armnight armhome).";
       return $text if ($attr_value !~ /^\d{1,3}((\s\d{1,3}){2})?$/);
     }
     elsif ($attr_name eq 'HomeSensorsBatteryLowPercentage')
@@ -3208,11 +3191,11 @@ sub Luminance
 
 sub TriggerState
 {
-  my ($hash,$getter,$type,$trigger) = @_;
+  my ($name,$getter,$type,$trigger,$retrigger) = @_;
   my $exit = (!$getter && !$type && $trigger)?1:undef;
   $getter  = $getter?$getter:'contactsOpen';
   $type = $type?$type:'all';
-  my $name = $hash->{NAME};
+  my $hash = $defs{$name};
   my $events = $trigger?deviceEvents($defs{$trigger},1):undef;
   my $contacts = $hash->{SENSORSCONTACT};
   my $motions = $hash->{SENSORSMOTION};
@@ -3229,6 +3212,7 @@ sub TriggerState
   my @alarmSensors;
   my @lightSensors;
   my $amode = ReadingsVal($name,'modeAlarm','disarm');
+  my $marker = '.HOMEMODE_'.$name.'_alarmDelayed';
   if ($contacts)
   {
     for my $sensor (split /,/,$contacts)
@@ -3237,10 +3221,16 @@ sub TriggerState
       my $read = AttrVal($sensor,'HomeReadingContact','state');
       my $val = AttrVal($sensor,'HomeValueContact','open|tilted|on|1|true');
       my $state = ReadingsVal($sensor,$read,'');
+      next if (!$state);
       my $amodea = AttrVal($sensor,'HomeModeAlarmActive','-');
       my $kind = AttrVal($sensor,'HomeContactType','window');
-      next if (!$state);
-      if ($state =~ /^$val$/)
+      my @delays = split ' ',AttrVal($sensor,'HomeAlarmDelay',AttrVal($name,'HomeSensorsAlarmDelay',''));
+      my $delay;
+      if ($amode ne 'disarmed' && int(@delays))
+      {
+        $delay = returnDelay($amode,@delays);
+      }
+      if ($state =~ /^($val)$/)
       {
         push @contactsOpen,$sensor;
         push @insideOpen,$sensor if ($kind eq 'doorinside');
@@ -3248,9 +3238,18 @@ sub TriggerState
         push @doorsMOpen,$sensor if ($kind && $kind eq 'doormain');
         push @outsideOpen,$sensor if ($kind =~ /^dooroutside|doormain|window$/x);
         push @windowsOpen,$sensor if ($kind eq 'window');
-        if ($amode =~ /^$amodea$/)
+        my $timer = 'atTmp_alarmDelayedTimer_'.$sensor.'_'.$name;
+        if ($amode =~ /^($amodea)$/)
         {
-          push @alarmSensors,$sensor;
+          if ($delay && !$retrigger && !ReadingsVal($sensor,$marker,0))
+          {
+            readingsSingleUpdate($defs{$sensor},$marker,1,0);
+            CommandDefine(undef,$timer.' at +'.hourMaker($delay/60)." {fhem \"sleep 0.1 quiet;{FHEM::Automation::HOMEMODE::TriggerState('$name',undef,undef,'$sensor',1)}\"}");
+          }
+          else
+          {
+            push @alarmSensors,$sensor if (!ID($timer,'at'));
+          }
         }
         if (defined $exit && $trigger eq $sensor && grep {/^$read:/x} @{$events})
         {
@@ -3273,7 +3272,8 @@ sub TriggerState
           ContactCommands($hash,$sensor,'closed',$kind);
           my $timer = 'atTmp_HomeOpenTimer_'.$sensor.'_'.$name;
           CommandDelete(undef,$timer) if (ID($timer,'at'));
-          CommandDeleteReading(undef,"$trigger .".$name.'-HomeOpenTrigger');
+          CommandDeleteReading(undef,"$trigger $marker");
+          CommandDeleteReading(undef,"$trigger .HOMEMODE_".$name.'_HomeOpenTrigger');
           ContactOpenWarning($name,$sensor);
         }
       }
@@ -3286,18 +3286,35 @@ sub TriggerState
       next if (IsDis($name,$sensor));
       my $read = AttrVal($sensor,'HomeReadingMotion','state');
       my $val = AttrVal($sensor,'HomeValueMotion','open|on|motion|1|true');
-      my $amodea = AttrVal($sensor,'HomeModeAlarmActive','-');
       my $state = ReadingsVal($sensor,$read,'');
-      my $kind = AttrVal($sensor,'HomeSensorLocation','inside');
       next if (!$state);
-      if ($state =~ /^$val$/x)
+      my $amodea = AttrVal($sensor,'HomeModeAlarmActive','-');
+      my $kind = AttrVal($sensor,'HomeSensorLocation','inside');
+      my @delays = split ' ',AttrVal($sensor,'HomeAlarmDelay',AttrVal($name,'HomeSensorsAlarmDelay',''));
+      my $delay;
+      if ($amode ne 'disarmed' && int(@delays))
       {
+        $delay = returnDelay($amode,@delays);
+      }
+      Debug $sensor;
+      if ($state =~ /^($val)$/x)
+      {
+        Debug 'yes';
         push @motionsOpen,$sensor;
         push @motionsInsideOpen,$sensor if ($kind eq 'inside');
         push @motionsOutsideOpen,$sensor if ($kind eq 'outside');
-        if ($amode =~ /^$amodea$/x)
+        my $timer = 'atTmp_alarmDelayedTimer_'.$sensor.'_'.$name;
+        if ($amode =~ /^($amodea)$/x)
         {
-          push @alarmSensors,$sensor;
+          if ($delay && !$retrigger && !ReadingsVal($sensor,$marker,0))
+          {
+            readingsSingleUpdate($defs{$sensor},$marker,1,0);
+            CommandDefine(undef,"$timer at +".hourMaker($delay/60)." {fhem \"sleep 0.1 quiet;{FHEM::Automation::HOMEMODE::TriggerState('$name',undef,undef,'$sensor',1)}\"}");
+          }
+          else
+          {
+            push @alarmSensors,$sensor if (!ID($timer,'at'));
+          }
         }
         if (defined $exit && $trigger eq $sensor && grep {/^$read:/x} @{$events})
         {
@@ -3366,6 +3383,7 @@ sub TriggerState
     readingsBulkUpdateIfChanged($hash,'motionsOutside_hr',makeHR($hash,0,@motionsOutsideOpen));
   }
   readingsEndUpdate($hash,1);
+  return if ($retrigger);
   if ($getter eq 'contactsOpen')
   {
     return "open contacts: $open" if ($open && $type eq 'all');
@@ -3382,6 +3400,23 @@ sub TriggerState
     return 'no open windows' if (!$openw && $type eq 'windows');
   }
   return;
+}
+
+sub returnDelay
+{
+  my ($amode,@delays) = @_;
+  my $delay;
+  if (defined $delays[1])
+  {
+    $delay = $delays[0] if ($amode eq 'armaway');
+    $delay = $delays[1] if ($amode eq 'armnight');
+    $delay = $delays[2] if ($amode eq 'armhome');
+  }
+  else
+  {
+    $delay = $delays[0];
+  }
+  return $delay;
 }
 
 sub name2alias
@@ -3415,7 +3450,7 @@ sub ContactOpenWarning
   for my $sen (devspec2array($hash->{SENSORSCONTACT}))
   {
     my $omt = AttrNum($sen,'HomeOpenMaxTrigger',0);
-    my $otr = ReadingsNum($sen,'.'.$name.'-HomeOpenTrigger',0);
+    my $otr = ReadingsNum($sen,'.HOMEMODE_'.$name.'_HomeOpenTrigger',0);
     my $dif = $omt-$otr;
     next if ($dif > $omt+1);
     my $sta = ReadingsVal($sen,AttrVal($sen,'HomeReadingContact','state'),'');
@@ -3444,7 +3479,7 @@ sub ContactOpenWarning
     push @warn1,$sen if ($dif>0 && $dif<$omt);
     push @warnexp,$sen if ($dif<1);
     $otr++;
-    readingsSingleUpdate($defs{$sen},'.'.$name.'-HomeOpenTrigger',$otr,0) if ($otr<=$omt+1);
+    readingsSingleUpdate($defs{$sen},'.HOMEMODE_'.$name.'_HomeOpenTrigger',$otr,0) if ($otr<=$omt+1);
   }
   if (!$unified)
   {
@@ -4437,8 +4472,8 @@ sub Details
         'Alarm modes to treat open as alarm';
       $html .= '<th><abbr title="'.$text.'">Home<br>ModeAlarmActive</abbr></th>';
       $text = $langDE?
-        '1-3 leerzeichenseparierte Werte in Sekunden um den Alarm in den verschiedenen Alarmmodi zu verzögern (armaway armhome armnight)':
-        '1-3 space separated values in seconds to delay the alarm for the different alarm modes (armaway armhome armnight)';
+        '1-3 leerzeichenseparierte Werte in Sekunden um den Alarm in den verschiedenen Alarmmodi zu verzögern (Reihenfolge: armaway armnight armhome)':
+        '1-3 space separated values in seconds to delay the alarm for the different alarm modes (order: armaway armnight armhome)';
       $html .= '<th><abbr title="'.$text.'">Home<br>AlarmDelay</abbr></th>';
       $text = $langDE?
         'Maximale Anzahl wie oft Offen-Warnungen ausgelöst werden sollen':
@@ -4656,8 +4691,8 @@ sub Details
         'Alarm modes to trigger open/motion as alarm';
       $html .= '<th><abbr title="'.$text.'">Home<br>ModeAlarmActive</abbr></th>';
       $text = $langDE?
-        '1-3 leerzeichenseparierte Werte in Sekunden um den Alarm in den verschiedenen Alarmmodi zu verzögern (armaway armhome armnight)':
-        '1-3 space separated values in seconds to delay the alarm for the different alarm modes (armaway armhome armnight)';
+        '1-3 leerzeichenseparierte Werte in Sekunden um den Alarm in den verschiedenen Alarmmodi zu verzögern (Reihenfolge: armaway armnight armhome)':
+        '1-3 space separated values in seconds to delay the alarm for the different alarm modes (order: armaway armnight armhome)';
       $html .= '<th><abbr title="'.$text.'">Home<br>AlarmDelay</abbr></th>';
       $text = $langDE?
         'Standort des Bewegungsmelders':
@@ -5536,7 +5571,7 @@ sub inform
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsAlarmDelay'>HomeSensorsAlarmDelay</a><br>
-      number in seconds to delay an alarm triggered by a contact or motion sensor<br>
+      1 or 3 space separated values in seconds to delay the alarm for the different alarm modes (order: armaway armnight armhome)<br>
       this is the global setting, you can also set this in each contact and motion sensor individually in attribute HomeAlarmDelay once they are added to the HOMEMODE device<br>
       default: 0
     </li>
@@ -5574,6 +5609,12 @@ sub inform
       devspec of contact sensors<br>
       each applied contact sensor will get the following attributes, attributes will be removed after removing the contact sensors from the HOMEMODE device.<br>
       <ul>
+        <li>
+          <a id='HOMEMODE-attr-HomeAlarmDelay'>HomeAlarmDelay</a><br>
+          1 or 3 space separated values in seconds to delay the alarm for the different alarm modes (order: armaway armnight armhome)<br>
+          this is the device setting, you can also set this globally in attribute HomeSensorsAlarmDelay<br>
+          default: 0
+        </li>
         <li>
           <a id='HOMEMODE-attr-HomeContactType'>HomeContactType</a><br>
           specify each contacts sensor's type, choose one of: doorinside, dooroutside, doormain, window<br>
