@@ -264,6 +264,15 @@ sub migrate
     @tampread = uniq @tampread;
     CommandAttr(undef,$name.' HomeSensorsTamperReading '.$tampread[0]) if (int(@tampread)==1 && !grep {$_ eq $tampread[0]} split /\|/x,'tampared|open|on|yes|1|true');
   }
+  my $hsbr = AttrVal($name,'HomeSensorsBatteryReading','');
+  if ($hsbr)
+  {
+    for (devspec2array($hash->{SENSORSBATTERY}))
+    {
+      CommandAttr(undef,"$_ HomeReadingBattery $hsbr");
+    }
+    CommandDeleteAttr(undef,$name.' HomeSensorsBatteryReading');
+  }
   if (AttrVal($name,'HomeSensorsContactReadings',undef))
   {
     CommandAttr(undef,$name.' HomeSensorsContactReading '.(split ' ',AttrVal($name,'HomeSensorsContactReadings',''))[0]);
@@ -418,13 +427,7 @@ sub Notify
         my $aname = $ev[1];
         my $aattr = $ev[2];
         my $avalue = $ev[3];
-        if ($aattr =~ /^Home(BatteryLowPercentage|ReadingBattery)$/x)
-        {
-          my $aread = AttrVal($aname,'HomeReadingBattery',AttrVal($name,'HomeSensorsBatteryReading','battery'));
-          my $read = $aattr eq 'HomeBatteryLowPercentage'?$aread:defined $avalue?$avalue:$aread;
-          my $val  = ReadingsVal($aname,$read,100);
-          CommandTrigger(undef,"$aname $read: $val");
-        }
+        BatteryCheck($hash) if ($aattr =~ /^Home(BatteryLowPercentage|ReadingBattery)$/x);
         Luminance($hash) if ($aattr eq 'HomeDividerLuminance');
         EnergyPower($hash,$1) if ($aattr =~ /^HomeDivider(Energy|Power)$/x);
         last;
@@ -639,52 +642,16 @@ sub Notify
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSBATTERY',''))
       {
-        my $read = AttrVal($devname,'HomeReadingBattery',AttrVal($name,'HomeSensorsBatteryReading','battery'));
-        my $pct = AttrNum($devname,'HomeBatteryLowPercentage',AttrNum($name,'HomeSensorsBatteryLowPercentage',30));
-        if (grep {/^$read:\s(.+)$/} @{$events})
+        my $read = AttrVal($devname,'HomeReadingBattery','battery');
+        if (grep {/^$read:\s.+$/} @{$events})
         {
-          my @lowOld = split /,/x,ReadingsVal($name,'batteryLow','');
-          my @low;
-          @low = @lowOld if (@lowOld);
           for my $evt (@{$events})
           {
             next unless ($evt =~ /^$read:\s(.+)$/);
-            my $val = $1;
-            inform($hash,"$devname.$read",$val);
-            if (($val =~ /^(\d{1,3})(%|\s%)?$/ && $1 <= $pct) || $val =~ /^(nok|low)$/x)
-            {
-              push @low,$devname if (!grep {$_ eq $devname} @low);
-            }
-            elsif (grep {$_ eq $devname} @low)
-            {
-              my @lown;
-              for (@low)
-              {
-                push @lown,$_ if ($_ ne $devname);
-              }
-              @low = @lown;
-            }
+            BatteryCheck($hash,$devname);
+            inform($hash,"$devname.$read",$1);
             last;
           }
-          readingsBeginUpdate($hash);
-          if (@low)
-          {
-            readingsBulkUpdateIfChanged($hash,'batteryLow',join(',',@low));
-            readingsBulkUpdateIfChanged($hash,'batteryLow_ct',int(@low));
-            readingsBulkUpdateIfChanged($hash,'batteryLow_hr',makeHR($hash,1,@low));
-            readingsBulkUpdateIfChanged($hash,'lastBatteryLow',$devname) if (grep {$_ eq $devname} @low && !grep {$_ eq $devname} @lowOld);
-          }
-          else
-          {
-            readingsBulkUpdateIfChanged($hash,'batteryLow','');
-            readingsBulkUpdateIfChanged($hash,'batteryLow_ct',int(@low));
-            readingsBulkUpdateIfChanged($hash,'batteryLow_hr','');
-          }
-          readingsBulkUpdateIfChanged($hash,'lastBatteryNormal',$devname) if (!grep {$_ eq $devname} @low && grep {$_ eq $devname} @lowOld);
-          readingsEndUpdate($hash,1);
-          push @commands,AttrVal($name,'HomeCMDbattery','') if (AttrVal($name,'HomeCMDbattery',undef) && (grep {$_ eq $devname} @low || grep {$_ eq $devname} @lowOld));
-          push @commands,AttrVal($name,'HomeCMDbatteryLow','') if (AttrVal($name,'HomeCMDbatteryLow',undef) && grep {$_ eq $devname} @low && !grep {$_ eq $devname} @lowOld);
-          push @commands,AttrVal($name,'HomeCMDbatteryNormal','') if (AttrVal($name,'HomeCMDbatteryNormal',undef) && !grep {$_ eq $devname} @low && grep {$_ eq $devname} @lowOld);
         }
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSCONTACT',''))
@@ -692,15 +659,13 @@ sub Notify
         my $read = AttrVal($devname,'HomeReadingContact',AttrVal($name,'HomeSensorsContactReading','state'));
         if (grep {/^$read:\s(.+)$/} @{$events})
         {
-          TriggerState($hash,undef,undef,$devname);
-          my $val;
           for my $evt (@{$events})
           {
             next if ($evt !~ /^$read:\s(.+)$/);
-            $val = $1;
+            TriggerState($hash,undef,undef,$devname);
+            inform($hash,"$devname.$read",$1);
             last;
           }
-          inform($hash,"$devname.$read",$val);
         }
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSENERGY',''))
@@ -730,15 +695,13 @@ sub Notify
         my $read = AttrVal($devname,'HomeReadingMotion',AttrVal($name,'HomeSensorsMotionReading','state'));
         if (grep {/^$read:\s.+$/} @{$events})
         {
-          TriggerState($hash,undef,undef,$devname);
-          my $val;
           for my $v (@{$events})
           {
             next if ($v !~ /^$read:\s(.+)$/);
-            $val = $1;
+            TriggerState($hash,undef,undef,$devname);
+            inform($hash,"$devname.$read",$1);
             last;
           }
-          inform($hash,"$devname.$read",$val);
         }
       }
       if (grep {$_ eq $devname} split /,/x,InternalVal($name,'SENSORSPOWER',''))
@@ -1113,6 +1076,7 @@ sub updateInternals
     twoStateSensor($hash,'Smoke') if ($hash->{SENSORSSMOKE});
     twoStateSensor($hash,'Tamper') if ($hash->{SENSORSTAMPER});
     twoStateSensor($hash,'Water') if ($hash->{SENSORSWATER});
+    BatteryCheck($hash) if ($hash->{SENSORSBATTERY});
     Weather($hash,$weather) if ($weather);
     Twilight($hash,$twilight,1) if ($twilight);
     ToggleDevice($hash,undef);
@@ -1764,7 +1728,6 @@ sub AttrList
     'HomeSensorWind:textField',
     'HomeSensorsAlarmDelay:textField',
     'HomeSensorsBattery:textField',
-    'HomeSensorsBatteryReading:textField',
     'HomeSensorsBatteryTypes:textField',
     'HomeSensorsContact:textField',
     'HomeSensorsContactReading:textField',
@@ -2200,7 +2163,7 @@ sub Attr
         "Ungültiger Wert $attr_value für Attribut $attr_name. Es wird wenigstens ein Wert oder mehrere Pipe separierte Werte benötigt! z.B. dummy|YOURMODULE":
         "Invalid value $attr_value for attribute $attr_name. You have to provide at least one value or more values pipe separated, e.g. dummy|YOURMODULE";
       return $text if ($attr_value !~ /^[\w\-\+\*\.\(\)]+(\|[\w\-\+\*\.\(\)]+){0,}$/xi);
-      updateInternals($hash);
+      updateInternals($hash,1);
     }
     elsif ($attr_name eq 'HomeIcewarningOnOffTemps')
     {
@@ -2508,7 +2471,7 @@ sub Attr
     {
       $langDE = AttrVal('global','language','DE') ? 1 : undef;
     }
-    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEventsDevices|HomeSensorAirpressure|HomeSensorWind|HomeSensorsBattery|HomeSensorsBatteryReading)$/x)
+    elsif ($attr_name =~ /^(HomeAdvancedAttributes|HomeAutoPresence|HomePresenceDeviceType|HomeEventsDevices|HomeSensorAirpressure|HomeSensorWind|HomeSensorsBattery)$/x)
     {
       CommandDeleteReading(undef,"$name event-.+") if ($attr_name =~ /^HomeEventsDevices$/x);
       CommandDeleteReading(undef,"$name battery.*|lastBatteryLow") if ($attr_name eq 'HomeSensorsBattery');
@@ -2579,13 +2542,13 @@ sub Attr
       CommandDeleteReading(undef,"$name .*luminance.*") if ($attr_name eq 'HomeSensorsLuminance');
       updateInternals($hash);
     }
-    elsif ($attr_name =~ /^HomeSensorsBatteryLowPercentage$/x)
+    elsif ($attr_name eq 'HomeSensorsBatteryLowPercentage')
     {
       updateInternals($hash);
     }
-    elsif ($attr_name =~ /^HomeSensorsBatteryTypes$/x)
+    elsif ($attr_name eq 'HomeSensorsBatteryTypes')
     {
-      updateInternals($hash);
+      updateInternals($hash,1);
     }
   }
   return;
@@ -2606,8 +2569,6 @@ sub replacePlaceholders
   my $durabsence = ReadingsVal($resident,'durTimerAbsence_cr',0);
   my $durpresence = ReadingsVal($resident,'durTimerPresence_cr',0);
   my $dursleep = ReadingsVal($resident,'durTimerSleep_cr',0);
-  # my $condition = ReadingsVal($sensor,'condition',ID($sensor)?'no data available':'no weather device available');
-  # my $conditionart = ReadingsVal($name,'.be','');
   my $contactsOpen = ReadingsVal($name,'contactsOutsideOpen','');
   my $contactsOpenCt = ReadingsVal($name,'contactsOutsideOpen_ct',0);
   my $contactsOpenHr = ReadingsVal($name,'contactsOutsideOpen_hr',0);
@@ -2640,19 +2601,19 @@ sub replacePlaceholders
   my $apdevice = ReadingsVal($name,'lastAbsentByPresenceDevice','');
   my $ppdevice = ReadingsVal($name,'lastPresentByPresenceDevice','');
   my $paddress = InternalVal($pdevice,'ADDRESS','');
-  # my $pressure = ReadingsVal($name,'pressure','');
+  my $pressure = ReadingsNum($name,'pressure',0);
   # my $weatherlong = WeatherTXT($hash,AttrVal($name,'HomeTextWeatherLong',''));
   # my $weathershort = WeatherTXT($hash,AttrVal($name,'HomeTextWeatherShort',''));
   my $forecast = ForecastTXT($hash);
   my $forecasttoday = ForecastTXT($hash,1);
   my $luminance = ReadingsVal($name,'luminance',0);
   my $luminancetrend = ReadingsVal($name,'luminanceTrend',0);
-  # my $humi = ReadingsVal($name,'humidity',0);
+  my $humi = ReadingsNum($name,'humidity',0);
   # my $humitrend = ReadingsVal($name,'humidityTrend',0);
-  # my $temp = ReadingsVal($name,'temperature',0);
+  my $temp = ReadingsNum($name,'temperature',0);
   # my $temptrend = ReadingsVal($name,'temperatureTrend','constant');
-  # my $wind = ReadingsVal($name,'wind',0);
-  # my $windchill = ReadingsVal($sensor,'apparentTemperature',ID($sensor)?'no data available':'no weather device available');
+  my $wind = ReadingsNum($name,'wind',0);
+  my $windchill = ReadingsNum($sensor,'apparentTemperature',0);
   my $motion = ReadingsVal($name,'lastMotion','');
   my $pmotion = ReadingsVal($name,'prevMotion','');
   my $contact = ReadingsVal($name,'lastContact','');
@@ -2745,7 +2706,7 @@ sub replacePlaceholders
   $cmd =~ s/%DURSLEEPLAST%/$lastsleepdur/xg;
   $cmd =~ s/%FORECAST%/$forecast/xg;
   $cmd =~ s/%FORECASTTODAY%/$forecasttoday/xg;
-  # $cmd =~ s/%HUMIDITY%/$humi/xg;
+  $cmd =~ s/%HUMIDITY%/$humi/xg;
   # $cmd =~ s/%HUMIDITYTREND%/$humitrend/xg;
   $cmd =~ s/%ICE%/$ice/xg;
   $cmd =~ s/%IP%/$ip/xg;
@@ -2768,7 +2729,7 @@ sub replacePlaceholders
   $cmd =~ s/%PANIC%/$panic/xg;
   $cmd =~ s/%PRESENT%/$pres/xg;
   $cmd =~ s/%PRESENTR%/$rpres/xg;
-  # $cmd =~ s/%PRESSURE%/$pressure/xg;
+  $cmd =~ s/%PRESSURE%/$pressure/xg;
   $cmd =~ s/%PREVAMODE%/$pamode/xg;
   $cmd =~ s/%PREVCONTACT%/$pcontact/xg;
   $cmd =~ s/%PREVMODE%/$pmode/xg;
@@ -2784,7 +2745,7 @@ sub replacePlaceholders
   $cmd =~ s/%TAMPERED%/$tampered/xg;
   $cmd =~ s/%TAMPEREDCT%/$tamperedc/xg;
   $cmd =~ s/%TAMPEREDHR%/$tamperedhr/xg;
-  # $cmd =~ s/%TEMPERATURE%/$temp/xg;
+  $cmd =~ s/%TEMPERATURE%/$temp/xg;
   # $cmd =~ s/%TEMPERATURETREND%/$temptrend/xg;
   # $cmd =~ s/%TOBE%/$conditionart/xg;
   $cmd =~ s/%TWILIGHT%/$twilight/xg;
@@ -2798,8 +2759,8 @@ sub replacePlaceholders
   $cmd =~ s/%WATERHR%/$waterhr/xg;
   # $cmd =~ s/%WEATHER%/$weathershort/xg;
   # $cmd =~ s/%WEATHERLONG%/$weatherlong/xg;
-  # $cmd =~ s/%WIND%/$wind/xg;
-  # $cmd =~ s/%WINDCHILL%/$windchill/xg;
+  $cmd =~ s/%WIND%/$wind/xg;
+  $cmd =~ s/%WINDCHILL%/$windchill/xg;
   return $cmd;
 }
 
@@ -3814,6 +3775,52 @@ sub HomebridgeMapping
   return;
 }
 
+sub BatteryCheck
+{
+  my ($hash,$devname) = @_;
+  my $name = $hash->{NAME};
+  my @lowOld = split /,/x,ReadingsVal($name,'batteryLow','');
+  my @low;
+  my @cmds;
+  for my $s (split ',',$hash->{SENSORSBATTERY})
+  {
+    my $r = AttrVal($s,'HomeReadingBattery','battery');
+    my $v = ReadingsVal($s,$r,'');
+    next unless ($v);
+    if (($v =~ /^(\d{1,3})(%|\s%)?$/ && $1 <= AttrNum($s,'HomeBatteryLowPercentage',AttrNum($name,'HomeSensorsBatteryLowPercentage',30))) || $v =~ /^nok|low$/x)
+    {
+      push @low,$s;
+    }
+  }
+  readingsBeginUpdate($hash);
+  my $rlow = @low?join(',',@low):'';
+  my $lowct = int(@low);
+  my $lowhr = @low?makeHR($hash,1,@low):'';
+  if (@low)
+  {
+    readingsBulkUpdateIfChanged($hash,'batteryLow',$rlow);
+    readingsBulkUpdateIfChanged($hash,'batteryLow_ct',$lowct);
+    readingsBulkUpdateIfChanged($hash,'batteryLow_hr',$lowhr);
+    readingsBulkUpdateIfChanged($hash,'lastBatteryLow',$devname) if ($devname && (grep {$_ eq $devname} @low) && !grep {$_ eq $devname} @lowOld);
+  }
+  else
+  {
+    readingsBulkUpdateIfChanged($hash,'batteryLow','');
+    readingsBulkUpdateIfChanged($hash,'batteryLow_ct',0);
+    readingsBulkUpdateIfChanged($hash,'batteryLow_hr','');
+  }
+  readingsBulkUpdateIfChanged($hash,'lastBatteryNormal',$devname) if ($devname && (!grep {$_ eq $devname} @low) && grep {$_ eq $devname} @lowOld);
+  readingsEndUpdate($hash,1);
+  if ($devname && (@low || @lowOld))
+  {
+    push @cmds,AttrVal($name,'HomeCMDbattery','') if (AttrVal($name,'HomeCMDbattery','') && ((grep {$_ eq $devname} @low) || (grep {$_ eq $devname} @lowOld)));
+    push @cmds,AttrVal($name,'HomeCMDbatteryLow','') if (AttrVal($name,'HomeCMDbatteryLow','') && (grep {$_ eq $devname} @low) && (!grep {$_ eq $devname} @lowOld));
+    push @cmds,AttrVal($name,'HomeCMDbatteryNormal','') if (AttrVal($name,'HomeCMDbatteryNormal','') && (!grep {$_ eq $devname} @low) && (grep {$_ eq $devname} @lowOld));
+    execCMDs($hash,serializeCMD($hash,@cmds)) if (@cmds);
+  }
+  return;
+}
+
 sub EnergyPower
 {
   my ($hash,$ep) = @_;
@@ -4392,9 +4399,9 @@ sub Details
         $html .= '<td><a href="/fhem?detail='.$s.'"><strong>'.$s.'</strong>';
         $html .= ' ('.$alias.')' if ($alias);
         $html .= '</a>'.FW_hidden('devname',$s).'</td>';
-        $html .= '<td>'.FW_textfieldv('HomeReadingBattery',10,'',AttrVal($s,'HomeReadingBattery',''),AttrVal($name,'HomeSensorsBatteryReading','battery'));
-        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingBattery',AttrVal($name,'HomeSensorsBatteryReading','battery')),'');
-        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingBattery',AttrVal($name,'HomeSensorsBatteryReading','battery')).'">'.(defined $val?$val:'--').'</span>';
+        $html .= '<td>'.FW_textfieldv('HomeReadingBattery',10,'',AttrVal($s,'HomeReadingBattery',''),'battery');
+        my $val = ReadingsVal($s,AttrVal($s,'HomeReadingBattery','battery'),'');
+        $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingBattery','battery').'">'.(defined $val?$val:'--').'</span>';
         $html .= '<td class="HOMEMODE_tac">';
         my $cl = $val !~ /^\d{1,3}/x?'ui-helper-hidden':'';
         $html .= FW_textfieldv('HomeBatteryLowPercentage',3,$cl,AttrVal($s,'HomeBatteryLowPercentage',''),AttrVal($name,'HomeSensorsBatteryLowPercentage','battery'));
@@ -5534,7 +5541,6 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingBattery'>HomeReadingBattery</a><br>
           Single word of name of the reading indicating the battery value<br>
-          this is the device setting which will override the global setting from attribute HomeSensorsBatteryReading of the HOMEMODE device<br>
           default: state
         </li>
         <li>
@@ -5549,12 +5555,6 @@ sub inform
       <a id='HOMEMODE-attr-HomeSensorsBatteryLowPercentage'>HomeSensorsBatteryLowPercentage</a><br>
       percentage to recognize a sensors battery as low (only percentage based sensors)<br>
       default: 30
-    </li>
-    <li>
-      <a id='HOMEMODE-attr-HomeSensorsBatteryReading'>HomeSensorsBatteryReading</a><br>
-      a single word of name of the reading indicating the battery value<br>
-      this is only here available as global setting for all devices<br>
-      default: battery
     </li>
     <li>
       <a id='HOMEMODE-attr-HomeSensorsBatteryTypes'>HomeSensorsBatteryTypes</a><br>

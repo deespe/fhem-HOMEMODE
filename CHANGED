@@ -15,6 +15,7 @@ v2.0.0
   - changed:  AttrFn not being executed until $init_done on HOMEMODE < 1.6
   - changed:  attribute name HomeAdvancedUserAttr to HomeAdvancedAttributes
   - changed:  attribute name HomeSensorWindspeed to HomeSensorWind
+  - changed:  battery check to its own function
   - changed:  from scalar() to int() on arrays
   - changed:  greps from regex to eg where possible
   - changed:  moved javascript to external file homemode.js
@@ -24,6 +25,7 @@ v2.0.0
   - changed:  unified attributes HomeEventsHolidayDevices and HomeEventsCalendarDevices into HomeEventsDevices
   - changed:  lots of minor changes
   - merged:   HOMEMODE 2.0 branch manually
+  - removed:  attribute HomeSensorsBatteryReading
   - removed:  greps on arrays where possible and instead use uniq on the final array
   - removed:  prototypes of functions
   - removed:  use POSIX
