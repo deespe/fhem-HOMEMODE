@@ -126,6 +126,7 @@ sub Define
   $hash->{NOTIFYDEV} = 'global';
   if ($init_done && !defined $hash->{OLDDEF})
   {
+    my $count = int(devspec2array('TYPE=HOMEMODE'));
     $attr{$name}{devStateIcon}  = "absent:user_away:dnd+on\n".
                                   "gone:user_ext_away:dnd+on\n".
                                   "dnd:audio_volume_mute:dnd+off\n".
@@ -141,11 +142,83 @@ sub Define
     $attr{$name}{icon}          = 'floor';
     $attr{$name}{room}          = 'HOMEMODE';
     $attr{$name}{webCmd}        = 'modeAlarm';
+    if ($langDE)
+    {
+      $attr{$name}{HomeTextAndAreIs} = 'und|sind|ist';
+      $attr{$name}{HomeTextClosedOpen} = 'geschlossen|geöffnet';
+    }
+    if (int(devspec2array('TYPE=UWZ'))==1)
+    {
+      $attr{$name}{HomeUWZ}     = (devspec2array('TYPE=UWZ'))[0];
+    }
+    if (int(devspec2array('TYPE=Weather'))==1)
+    {
+      $attr{$name}{HomeWeatherDevice} = (devspec2array('TYPE=Weather'))[0];
+      if ($langDE)
+      {
+        $attr{$name}{HomeTextRisingConstantFalling} = 'steigend|gleichbleibend|fallend';
+        $attr{$name}{HomeTextTodayTomorrowAfterTomorrow} = 'Heute|Morgen|Übermorgen';
+        $attr{$name}{HomeTextWeatherForecastInSpecDays} = 'In %DAY% Tagen %CONDITION% bei Temperaturen von %LOW% bis %HIGH%°C.';
+        $attr{$name}{HomeTextWeatherForecastToday} = '%DAY% %CONDITION% bei Temperaturen von %LOW% bis %HIGH%°C. Aktuelle Temperatur %TEMPERATURE%°C bei einer Luftfeuchtigkeit von %HUMIDITY%%. Die gefühlte Temperatur ist %WINDCHILL%°C bei einer Windgeschwindigkeit von %WIND%km/h.';
+        $attr{$name}{HomeTextWeatherForecastTomorrow} = '%DAY% %CONDITION% bei Temperaturen von %LOW% bis %HIGH%°C.';
+        $attr{$name}{HomeTextWeatherLong} = 'Es %TOBE% %CONDITION% bei %TEMPERATURE%°C und %HUMIDITY%% relativer Luftfeuchtigkeit. Die gefühlte Temperatur ist %WINDCHILL%°C bei einer Windgeschwindigkeit von %WIND%km/h. Der Luftdruck ist %PRESSURE%hPa.';
+        $attr{$name}{HomeTextWeatherShort} = '%CONDITION%, %TEMPERATURE%°C, %HUMIDITY%% Luftfeuchtigkeit, Luftdruck %PRESSURE%hPa';
+      }
+    }
+    if (int(devspec2array('TYPE=Twilight'))==1)
+    {
+      $attr{$name}{HomeTwilightDevice} = (devspec2array('TYPE=Twilight'))[0];
+    }
+    if ($count==1)
+    {
+      if (devspec2array('model=HM-SEC-SD-2'))
+      {
+        $attr{$name}{HomeSensorsSmoke} = 'model=HM-SEC-SD-2';
+      }
+      if (devspec2array('model=HM-SEC-SCO'))
+      {
+        $attr{$name}{HomeSensorsContact} = 'model=HM-SEC-SCO';
+      }
+      if (devspec2array('r:state=motion|nomotion'))
+      {
+        $attr{$name}{HomeSensorsMotion} = 'r:state=motion|nomotion';
+      }
+      if (devspec2array('r:sabotageError=.+'))
+      {
+        $attr{$name}{HomeSensorsTamper} = 'r:sabotageError=.+';
+      }
+      if (devspec2array('r:luminance=.+'))
+      {
+        $attr{$name}{HomeSensorsLuminance} = 'r:luminance=.+';
+      }
+      if (devspec2array('r:energy=.+'))
+      {
+        $attr{$name}{HomeSensorsEnergy} = 'r:energy=.+';
+      }
+      if (devspec2array('r:power=.+'))
+      {
+        $attr{$name}{HomeSensorsPower} = 'r:power=.+';
+      }
+      if (devspec2array('r:battery=.+'))
+      {
+        $attr{$name}{HomeSensorsBattery} = 'r:battery=.+';
+      }
+      if (devspec2array('i:type=ZHAWater'))
+      {
+        $attr{$name}{HomeSensorsWater} = 'i:type=ZHAWater';
+      }
+      if (devspec2array('TYPE=Calendar|holiday'))
+      {
+        $attr{$name}{HomeEventsDevices} = 'TYPE=Calendar|holiday';
+      }
+    }
     readingsBeginUpdate($hash);
     readingsBulkUpdate($hash,'dnd','off') if (!defined ReadingsVal($name,'dnd',undef));
     readingsBulkUpdate($hash,'anyoneElseAtHome','off') if (!defined ReadingsVal($name,'anyoneElseAtHome',undef));
     readingsBulkUpdate($hash,'panic','off') if (!defined ReadingsVal($name,'panic',undef));
+    readingsBulkUpdate($hash,'.HOMEMODE_ver',$ver);
     readingsEndUpdate($hash,0);
+    HomebridgeMapping($hash) if (devspec2array('TYPE=siri'));
   }
   Init($hash,$resdev) if ($init_done);
   return;
@@ -4443,7 +4516,7 @@ sub Details
         $html .= '<span class="dval HOMEMODE_read" informid="'.$name.'-'.$s.'.'.AttrVal($s,'HomeReadingBattery','battery').'">'.(defined $val?$val:'--').'</span>';
         $html .= '<td class="HOMEMODE_tac">';
         my $cl = $val !~ /^\d{1,3}/x?'ui-helper-hidden':'';
-        $html .= FW_textfieldv('HomeBatteryLowPercentage',3,$cl,AttrVal($s,'HomeBatteryLowPercentage',''),AttrVal($name,'HomeSensorsBatteryLowPercentage','battery'));
+        $html .= FW_textfieldv('HomeBatteryLowPercentage',3,$cl,AttrVal($s,'HomeBatteryLowPercentage',''),AttrVal($name,'HomeSensorsBatteryLowPercentage',30));
         $html .= '</td>';
         $html .= '</tr>';
         $c++;
@@ -5584,13 +5657,13 @@ sub inform
         <li>
           <a id='HOMEMODE-attr-HomeReadingBattery'>HomeReadingBattery</a><br>
           Single word of name of the reading indicating the battery value<br>
-          default: state
+          default: battery
         </li>
         <li>
           <a id='HOMEMODE-attr-HomeBatteryLowPercentage'>HomeBatteryLowPercentage</a><br>
           percentage to recognize a sensors battery as low (only percentage based sensors)<br>
           this is the device setting which will override the global setting from attribute HomeSensorsBatteryLowPercentage of the HOMEMODE device<br>
-          default: 1
+          default:
         </li>
       </ul>
     </li>

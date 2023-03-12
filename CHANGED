@@ -5,6 +5,7 @@ v2.0.0
   - added:    cookies for some settings
   - added:    jQuery cookie library into homemode.js
   - added:    more HomeKit Characteristics
+  - added:    more predefined attributes for first time users
   - added:    new attribute HomeSensorsBatteryTypes to whitelist speciffic device types as battery sensors
   - added:    new attribute HomeEventsFilter-CALENDARNAME to filter out speciffic calendar events/summaries for each calendar
   - added:    new attributes HomeSensorsAlarmDelay and HomeAlarmDelay to delay the alarm of alarm sensors
