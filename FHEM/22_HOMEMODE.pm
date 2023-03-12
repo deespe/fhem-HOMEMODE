@@ -2705,6 +2705,7 @@ sub replacePlaceholders
   my $waterc = ReadingsVal($name,'alarmWater_ct',0);
   my $waterhr = ReadingsVal($name,'alarmWater_hr',0);
   my $unified = AttrNum($name,'HomeSensorsContactOpenWarningUnified',0);
+  my $rainLevel = ReadingsVal($name,'rainLevel',0);
   $cmd = WeatherTXT($hash,$cmd);
   $cmd =~ s/%ADDRESS%/$paddress/xg;
   $cmd =~ s/%ALARM%/$alarm/xg;
@@ -2799,6 +2800,7 @@ sub replacePlaceholders
   $cmd =~ s/%PREVMODE%/$pmode/xg;
   $cmd =~ s/%PREVMODER%/$rpmode/xg;
   $cmd =~ s/%PREVMOTION%/$pmotion/xg;
+  $cmd =~ s/%RAINLEVEL%/$rainLevel/xg;
   $cmd =~ s/%SEASON%/$season/xg;
   $cmd =~ s/%SELF%/$name/xg;
   $cmd =~ s/%SENSORSBATTERY%/$sensorsbattery/xg;
@@ -6728,6 +6730,10 @@ sub inform
     <li>
       <a id='HOMEMODE-placeholders-%PREVMOTION%'>%PREVMOTION%</a><br>
       previous open motion sensor
+    </li>
+    <li>
+      <a id='HOMEMODE-placeholders-%RAINLEVEL%'>%RAINLEVEL%</a><br>
+      value of the rainLevel reading of the HOMEMODE device
     </li>
     <li>
       <a id='HOMEMODE-placeholders-%SEASON%'>%SEASON%</a><br>
