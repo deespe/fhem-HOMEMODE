@@ -2192,7 +2192,8 @@ sub Attr
       return $text if ($attr_value !~ /^[01]$/x);
       RemoveInternalTimer($hash) if ($attr_name eq 'disable' && $attr_value);
       GetUpdate($hash) if ($attr_name eq 'disable' && !$attr_value);
-      updateInternals($hash) if ($attr_name =~ /^Home(AdvancedAttributes|AutoPresence)$/x && $init_done);
+      updateInternals($hash,1) if ($attr_name =~ /^HomeAutoPresence$/x && $init_done);
+      AttrList($hash) if ($attr_name =~ /^HomeAdvancedAttributes$/x && $init_done);
       addSensorsUserAttr($hash,$hash->{SENSORSCONTACT},$hash->{SENSORSCONTACT}) if ($attr_name eq 'HomeSensorsContactOpenWarningUnified' && $init_done);
     }
     elsif ($attr_name =~ /^HomeCMD/x && $init_done)
@@ -2532,6 +2533,7 @@ sub Attr
       CommandDeleteReading(undef,"$name event.*") if ($attr_name eq 'HomeEventsDevices');
       CommandDeleteReading(undef,"$name rain.*") if ($attr_name eq 'HomeSensorRain');
       CommandDeleteReading(undef,"$name battery.*|lastBatteryLow") if ($attr_name eq 'HomeSensorsBattery');
+      AttrList($hash) if ($attr_name =~ /^HomeAdvancedAttributes$/x);
       updateInternals($hash);
     }
     elsif ($attr_name =~ /^HomeEventsFilter-.+$/x)
