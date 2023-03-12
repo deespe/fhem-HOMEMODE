@@ -4331,13 +4331,28 @@ sub Details
       $text = $langDE?'Temperatur':'Temperature';
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $text = $langDE?'Wettervorhersage':'Weather forecast';
-      $html .= '<td class="dval"><span informid="'.$name.'-temperature">'.ReadingsNum($name,'temperature','').'</span> °C<span class="HOMEMODE_info" informid="'.$name.'-weatherTextForecastToday" header="'.$text.'">'.ReadingsVal($name,'weatherTextForecastToday','<NO FORECAST AVAILABLE>').'</span></td>';
+      $html .= '<td class="dval"><span informid="'.$name.'-temperature">'.ReadingsNum($name,'temperature',0).'</span> °C<span class="HOMEMODE_info" informid="'.$name.'-weatherTextForecastToday" header="'.$text.'">'.ReadingsVal($name,'weatherTextForecastToday','<NO FORECAST AVAILABLE>').'</span></td>';
       $text = $langDE?'Luftfeuchte':'Humidity';
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
-      $html .= '<td class="dval"><span informid="'.$name.'-humidity">'.ReadingsNum($name,'humidity','').'</span> %</td>';
+      $html .= '<td class="dval"><span informid="'.$name.'-humidity">'.ReadingsNum($name,'humidity',0).'</span> %</td>';
       $text = $langDE?'Luftdruck':'Air pressure';
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
-      $html .= '<td class="dval"><span informid="'.$name.'-pressure">'.ReadingsNum($name,'pressure','').'</span> hPa</td>';
+      $html .= '<td class="dval"><span informid="'.$name.'-pressure">'.ReadingsNum($name,'pressure',0).'</span> hPa</td>';
+      $html .= '</tr>';
+    }
+    if (ReadingsVal($name,'wind',''))
+    {
+      $html .= '<tr class="HOMEMODE_i">';
+      $text = $langDE?'Windgeschwindigkeit':'Wind speed';
+      $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
+      $text = $langDE?'Wettervorhersage':'Weather forecast';
+      $html .= '<td class="dval"><span informid="'.$name.'-wind">'.ReadingsNum($name,'wind',0).'</span> km/h<span class="HOMEMODE_info" informid="'.$name.'-weatherTextForecastToday" header="'.$text.'">'.ReadingsVal($name,'weatherTextForecastToday','<NO FORECAST AVAILABLE>').'</span></td>';
+      $text = $langDE?'Böengeschwindigkeit':'Gust speed';
+      $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
+      $html .= '<td class="dval"><span informid="'.$name.'-windGust">'.ReadingsVal($name,'windGust','-').'</span> km/h</td>';
+      $text = $langDE?'Windrichtung':'Wind direction';
+      $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
+      $html .= '<td class="dval"><span informid="'.$name.'-windDirection">'.ReadingsVal($name,'windDirection','-').'</span></td>';
       $html .= '</tr>';
     }
     if (int(@powers) || int(@energies) || int(@lights))
@@ -4367,18 +4382,18 @@ sub Details
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Offene Kontakte':'Open contacts';
-      $html .= int(@contacts)?'<span informid="'.$name.'-contactsOpen_ct">'.ReadingsNum($name,'contactsOpen_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-contactsOpen_hr" header="'.$text.'">'.ReadingsVal($name,'contactsOpen_hr','-').'</span>':'-';
+      $html .= int(@contacts)?'<span informid="'.$name.'-contactsOpen_ct">'.ReadingsNum($name,'contactsOpen_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-contactsOpen_hr" header="'.$text.'">'.ReadingsVal($name,'contactsOpen_hr','').'</span>':'-';
       $html .= '</td>';
       $text = $langDE?'Offen-Warnungen':'Open warnings';
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Aktive Offen-Warnungen':'Active open warnings';
-      $html .= int(@contacts)?'<span informid="'.$name.'-contactWarning_ct">'.ReadingsNum($name,'contactWarning_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-contactWarning_hr" header="'.$text.'">'.ReadingsVal($name,'contactWarning_hr','-').'</span>':'-';
+      $html .= int(@contacts)?'<span informid="'.$name.'-contactWarning_ct">'.ReadingsNum($name,'contactWarning_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-contactWarning_hr" header="'.$text.'">'.ReadingsVal($name,'contactWarning_hr','').'</span>':'-';
       $html .= '</td>';
       $html .= '<td class="HOMEMODE_tar">'.($langDE?'Abgel. Offen-Warnungen':'Expired open warnings').':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Abgelaufene Offen-Warnungen':'Expired open warnings';
-      $html .= '<span informid="'.$name.'-contactWarningExpired_ct">'.ReadingsNum($name,'contactWarningExpired_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-contactWarningExpired_hr" header="'.$text.'">'.ReadingsVal($name,'contactWarningExpired_hr','-').'</span>';
+      $html .= '<span informid="'.$name.'-contactWarningExpired_ct">'.ReadingsNum($name,'contactWarningExpired_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-contactWarningExpired_hr" header="'.$text.'">'.ReadingsVal($name,'contactWarningExpired_hr','').'</span>';
       $html .= '</td>';
       $html .= '</tr>';
     }
@@ -4389,19 +4404,19 @@ sub Details
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Niedrige Batteriestände':'Low batteries';
-      $html .= int(@batteries)?'<span informid="'.$name.'-batteryLow_ct">'.ReadingsNum($name,'batteryLow_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-batteryLow_hr" header="'.$text.'">'.ReadingsVal($name,'batteryLow_hr','-').'</span>':'-';
+      $html .= int(@batteries)?'<span informid="'.$name.'-batteryLow_ct">'.ReadingsNum($name,'batteryLow_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-batteryLow_hr" header="'.$text.'">'.ReadingsVal($name,'batteryLow_hr','').'</span>':'-';
       $html .= '</td>';
       $text = $langDE?'Rauch':'Smoke';
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Aktive Rauch/Feuer Alarme':'Active smoke/fire alarms';
-      $html .= int(@smokes)?'<span informid="'.$name.'-alarmSmoke_ct">'.ReadingsNum($name,'alarmSmoke_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmSmoke_hr" header="'.$text.'">'.ReadingsVal($name,'alarmSmoke_hr','-').'</span>':'-';
+      $html .= int(@smokes)?'<span informid="'.$name.'-alarmSmoke_ct">'.ReadingsNum($name,'alarmSmoke_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmSmoke_hr" header="'.$text.'">'.ReadingsVal($name,'alarmSmoke_hr','').'</span>':'-';
       $html .= '</td>';
       $text = $langDE?'Sabotiert':'Tampered';
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Aktive Sabotagealarme':'Active tamper alarms';
-      $html .= int(@tampers)?'<span informid="'.$name.'-alarmTamper_ct">'.ReadingsNum($name,'alarmTamper_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmTamper_hr" header="'.$text.'">'.ReadingsVal($name,'alarmTamper_hr','-').'</span>':'-';
+      $html .= int(@tampers)?'<span informid="'.$name.'-alarmTamper_ct">'.ReadingsNum($name,'alarmTamper_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmTamper_hr" header="'.$text.'">'.ReadingsVal($name,'alarmTamper_hr','').'</span>':'-';
       $html .= '</td>';
       $html .= '</tr>';
     }
@@ -4412,18 +4427,18 @@ sub Details
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Aktive Wasseralarme':'Active water alarms';
-      $html .= int(@waters)?'<span informid="'.$name.'-alarmWater_ct">'.ReadingsNum($name,'alarmWater_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmWater_hr" header="'.$text.'">'.ReadingsVal($name,'alarmWater_hr','-').'</span>':'-';
+      $html .= int(@waters)?'<span informid="'.$name.'-alarmWater_ct">'.ReadingsNum($name,'alarmWater_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmWater_hr" header="'.$text.'">'.ReadingsVal($name,'alarmWater_hr','').'</span>':'-';
       $html .= '</td>';
       $text = $langDE?'Bewegung':'Motion';
       $html .= '<td class="HOMEMODE_tar">'.$text.':</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Aktive Bewegungen':'Active motions';
-      $html .= int(@motions)?'<span informid="'.$name.'-motionsSensors_ct">'.ReadingsNum($name,'motionsSensors_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-motionsSensors_hr" header="'.$text.'">'.ReadingsVal($name,'motionsSensors_hr','-').'</span>':'-';
+      $html .= int(@motions)?'<span informid="'.$name.'-motionsSensors_ct">'.ReadingsNum($name,'motionsSensors_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-motionsSensors_hr" header="'.$text.'">'.ReadingsVal($name,'motionsSensors_hr','').'</span>':'-';
       $html .= '</td>';
       $html .= '<td class="HOMEMODE_tar">Alarm:</td>';
       $html .= '<td class="dval HOMEMODE_i">';
       $text = $langDE?'Aktive Alarme':'Active alarms';
-      $html .= '<span informid="'.$name.'-alarmTriggered_ct">'.ReadingsNum($name,'alarmTriggered_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmTriggered_hr" header="'.$text.'">'.ReadingsVal($name,'alarmTriggered_hr','-').'</span>';
+      $html .= '<span informid="'.$name.'-alarmTriggered_ct">'.ReadingsNum($name,'alarmTriggered_ct',0).'</span><span class="HOMEMODE_info" informid="'.$name.'-alarmTriggered_hr" header="'.$text.'">'.ReadingsVal($name,'alarmTriggered_hr','').'</span>';
       $html .= '</td>';
       $html .= '</tr>';
     }
