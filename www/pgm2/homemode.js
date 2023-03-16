@@ -5,7 +5,7 @@ $(FW_HomeModeReadyFn);
 
 const translations = {
   "EN": [
-    "Can't delete this attribute because it is not set!",
+    "Can't delete this attribute because it's not set!",
     "Invalid value!<br>Must be a single number (seconds) or three space separated numbers (seconds)<br>for each alarm mode individually (armaway armnight armhome).",
     "Invalid value!<br>This should be the maximum number how often open warnings should be repeated.",
     "Invalid value!<br>You have to provide space separated numbers, e.g. 5 10 15 17.5",
@@ -36,7 +36,6 @@ const translations = {
 
 /*! js-cookie v3.0.1 | MIT */
 !function(e,t){"object"==typeof exports&&"undefined"!=typeof module?module.exports=t():"function"==typeof define&&define.amd?define(t):(e=e||self,function(){var n=e.Cookies,o=e.Cookies=t();o.noConflict=function(){return e.Cookies=n,o}}())}(this,(function(){"use strict";function e(e){for(var t=1;t<arguments.length;t++){var n=arguments[t];for(var o in n)e[o]=n[o]}return e}return function t(n,o){function r(t,r,i){if("undefined"!=typeof document){"number"==typeof(i=e({},o,i)).expires&&(i.expires=new Date(Date.now()+864e5*i.expires)),i.expires&&(i.expires=i.expires.toUTCString()),t=encodeURIComponent(t).replace(/%(2[346B]|5E|60|7C)/g,decodeURIComponent).replace(/[()]/g,escape);var c="";for(var u in i)i[u]&&(c+="; "+u,!0!==i[u]&&(c+="="+i[u].split(";")[0]));return document.cookie=t+"="+n.write(r,t)+c}}return Object.create({set:r,get:function(e){if("undefined"!=typeof document&&(!arguments.length||e)){for(var t=document.cookie?document.cookie.split("; "):[],o={},r=0;r<t.length;r++){var i=t[r].split("="),c=i.slice(1).join("=");try{var u=decodeURIComponent(i[0]);if(o[u]=n.read(c,u),e===u)break}catch(e){}}return e?o[e]:o}},remove:function(t,n){r(t,"",e({},n,{expires:-1}))},withAttributes:function(n){return t(this.converter,e({},this.attributes,n))},withConverter:function(n){return t(e({},this.converter,n),this.attributes)}},{attributes:{value:Object.freeze(o)},converter:{value:Object.freeze(n)}})}({read:function(e){return'"'===e[0]&&(e=e.slice(1,-1)),e.replace(/(%[\dA-F]{2})+/gi,decodeURIComponent)},write:function(e){return encodeURIComponent(e).replace(/%(2[346BF]|3[AC-F]|40|5[BDE]|60|7[BCD])/g,decodeURIComponent)}},{path:"/"})}));
-
 
 function FW_HomeModeReadyFn() {
   var maindev = $("#HOMEMODE").attr("devname");
@@ -80,76 +79,76 @@ function FW_HomeModeReadyFn() {
   if (Cookies.get(prefix+'internalsHide'))
     $(".HOMEMODE_internals").trigger('click');
   // $('.attr.downText').parent().find('select').next().after('<a id="HOMEMODE-attr-delete" class="attr" title="'+lang[9]+'" href="#">deleteattr</a>');
-  $('.attr.downText').parent().find('select').next().after('<input type="submit" id="HOMEMODE-attr-delete" value="deleteattr" class="attr" title="'+lang[9]+'">');
-  $("#HOMEMODE-attr-delete").unbind().click(function() {
-    var par = $(this).parent();
-    var atr = par.find("select option:selected").val();
-    var url = "fhem?cmd=jsonlist2%20"+maindev+"%20"+atr+addcsrf("")+"&XHR=1";
-    $.getJSON(url,function(data) {
-      var res = data.Results[0].Attributes[atr];
-      if (res) {
-        FW_delete('deleteattr '+maindev+' '+atr);
-        return false;
-      } else {
-        FW_okDialog(lang[0]);
-        return false;
-      }
-    });
-  });
-  $('.HOMEMODE_table').find('.add').unbind().click(function(){
-    var type = $(this).parent().parent().parent().parent().attr('id').split('-')[1];
-    HOMEMODE_addDevice(type);
-    return false;
-  });
-  function HOMEMODE_addDevice(type)
-  {
-    var div = $('<div>');
-    var attr = 'HomeSensors'+type;
-    var val = $('.attributes').find('.dname').find('a:contains("'+attr+'")').parent().parent().parent().find('.dval').html();
-    if (val.match(/^\.[\*\+]$/i))
-      return FW_okDialog('No need to add more sensors because you already applied all device');
-    $(div).html('Add sensor '+type.toLowerCase()+':<br><br><input type="text" size="30" value="" placeholder="comma seperated list">');
-    $('body').append(div);
-    $(div).dialog({
-      dialogClass:'no-close', modal:true, width:'auto', closeOnEscape:true, 
-      maxWidth:$(window).width()*0.9, maxHeight:$(window).height()*0.9,
-      buttons: [
-        {text:'Add', click:function(){
-          if(!type.match(/^[a-z0-9._]+(,[a-z0-9._]+)*?$/i))
-            return FW_okDialog('Illegal characters in the name(s)');
-          var nn = $(div).find('input').val();
-          var arr = nn.split(',');
-          arr.forEach(function(e){
-            alert(e);
-            $.getJSON("fhem?cmd=jsonlist2%20"+e+addcsrf("")+"&XHR=1",function(data) {
-              var res = data.totalResultsReturned;
-              if (res != 1) {
-                return FW_okDialog('Device '+e+' is not defined');
-              }
-              var nval = val+','+nn;
-              alert(nval);
-            });
-          });
-          // return false;
-          // location.href=addcsrf(FW_root+'?cmd=attr '+maindev+' HomeSensors'+$type+'&detail='+maindev);
-        }},
-        {text:'Cancel', click:doClose} ],
-      close: doClose
-    });
+  // $('.attr.downText').parent().find('select').next().after('<input type="submit" id="HOMEMODE-attr-delete" value="deleteattr" class="attr" title="'+lang[9]+'">');
+  // $("#HOMEMODE-attr-delete").unbind().click(function() {
+  //   var par = $(this).parent();
+  //   var atr = par.find("select option:selected").val();
+  //   var url = "fhem?cmd=jsonlist2%20"+maindev+"%20"+atr+addcsrf("")+"&XHR=1";
+  //   $.getJSON(url,function(data) {
+  //     var res = data.Results[0].Attributes[atr];
+  //     if (res) {
+  //       FW_delete('deleteattr '+maindev+' '+atr);
+  //       return false;
+  //     } else {
+  //       FW_okDialog(lang[0]);
+  //       return false;
+  //     }
+  //   });
+  // });
+  // $('.HOMEMODE_table').find('.add').unbind().click(function(){
+  //   var type = $(this).parent().parent().parent().parent().attr('id').split('-')[1];
+  //   HOMEMODE_addDevice(type);
+  //   return false;
+  // });
+  // function HOMEMODE_addDevice(type)
+  // {
+  //   var div = $('<div>');
+  //   var attr = 'HomeSensors'+type;
+  //   var val = $('.attributes').find('.dname').find('a:contains("'+attr+'")').parent().parent().parent().find('.dval').html();
+  //   if (val.match(/^\.[\*\+]$/i))
+  //     return FW_okDialog('No need to add more sensors because you already applied all device');
+  //   $(div).html('Add sensor '+type.toLowerCase()+':<br><br><input type="text" size="30" value="" placeholder="comma seperated list">');
+  //   $('body').append(div);
+  //   $(div).dialog({
+  //     dialogClass:'no-close', modal:true, width:'auto', closeOnEscape:true, 
+  //     maxWidth:$(window).width()*0.9, maxHeight:$(window).height()*0.9,
+  //     buttons: [
+  //       {text:'Add', click:function(){
+  //         if(!type.match(/^[a-z0-9._]+(,[a-z0-9._]+)*?$/i))
+  //           return FW_okDialog('Illegal characters in the name(s)');
+  //         var nn = $(div).find('input').val();
+  //         var arr = nn.split(',');
+  //         arr.forEach(function(e){
+  //           alert(e);
+  //           $.getJSON("fhem?cmd=jsonlist2%20"+e+addcsrf("")+"&XHR=1",function(data) {
+  //             var res = data.totalResultsReturned;
+  //             if (res != 1) {
+  //               return FW_okDialog('Device '+e+' is not defined');
+  //             }
+  //             var nval = val+','+nn;
+  //             alert(nval);
+  //           });
+  //         });
+  //         // return false;
+  //         // location.href=addcsrf(FW_root+'?cmd=attr '+maindev+' HomeSensors'+$type+'&detail='+maindev);
+  //       }},
+  //       {text:'Cancel', click:doClose} ],
+  //     close: doClose
+  //   });
 
-    function doClose()
-    {
-      $(this).dialog('close');
-      $(div).remove();
-      return false;
-    }
-  }
+  //   function doClose()
+  //   {
+  //     $(this).dialog('close');
+  //     $(div).remove();
+  //     return false;
+  //   }
+  // }
   $(".HOMEMODE_button").unbind().click(function() {
     var id = $(this).attr("id");
     var kt = $("#"+id+"-table");
-    if (kt.is(":hidden"))
+    if (kt.is(':hidden'))
     {
-      $(".HOMEMODE_table").hide();
+      $(".HOMEMODE_table").not(':hidden').hide();
       $(".HOMEMODE_button.active").removeClass('active');
       kt.show();
       $(this).addClass('active');

@@ -7,7 +7,7 @@
 #
 #####################################################################################
 
-package FHEM::Automation::HOMEMODE;
+package FHEM::HOMEMODE;
 
 use strict;
 use warnings;
@@ -458,7 +458,7 @@ sub GetUpdate
 {
   my ($hash) = @_;
   my $name = $hash->{NAME};
-  RemoveInternalTimer($hash,'FHEM::Automation::HOMEMODE::GetUpdate');
+  RemoveInternalTimer($hash,'FHEM::HOMEMODE::GetUpdate');
   return if (IsDis($name));
   my $mode = DayTime($hash);
   SetDaytime($hash);
@@ -467,7 +467,7 @@ sub GetUpdate
   checkIP($hash) if ((AttrNum($name,'HomePublicIpCheckInterval',0) && !$hash->{'.IP_TRIGGERTIME_NEXT'}) || (AttrNum($name,'HomePublicIpCheckInterval',0) && $hash->{'.IP_TRIGGERTIME_NEXT'} && $hash->{'.IP_TRIGGERTIME_NEXT'} < gettimeofday()));
   my $timer = gettimeofday() + 5;
   $hash->{'.TRIGGERTIME_NEXT'} = $timer;
-  InternalTimer($timer,'FHEM::Automation::HOMEMODE::GetUpdate',$hash);
+  InternalTimer($timer,'FHEM::HOMEMODE::GetUpdate',$hash);
   return;
 }
 
@@ -488,7 +488,7 @@ sub Notify
     if (grep {$_ eq 'INITIALIZED'} @{$events})
     {
       Init($hash,$defs{$name}{DEF});
-      InternalTimer(gettimeofday()+30,'FHEM::Automation::HOMEMODE::AttrList',$hash);
+      InternalTimer(gettimeofday()+30,'FHEM::HOMEMODE::AttrList',$hash);
       push @commands,AttrVal($name,'HomeCMDfhemINITIALIZED','') if (AttrVal($name,'HomeCMDfhemINITIALIZED',''));
     }
     elsif (grep {$_ eq 'SAVE'} @{$events})
@@ -1376,7 +1376,7 @@ sub Set
       {
         my $hour = hourMaker(AttrNum($name,'HomeModeAbsentBelatedTime',0));
         CommandDelete(undef,"atTmp_absent_belated_$name") if (ID("atTmp_absent_belated_$name",'at'));
-        CommandDefine(undef,"atTmp_absent_belated_$name at +$hour {FHEM::Automation::HOMEMODE::execCMDs_belated(\"$name\",\"HomeCMDmode-absent-belated\",\"$option\")}");
+        CommandDefine(undef,"atTmp_absent_belated_$name at +$hour {FHEM::HOMEMODE::execCMDs_belated(\"$name\",\"HomeCMDmode-absent-belated\",\"$option\")}");
       }
     }
     ContactOpenWarningAfterModeChange($hash,$option,$mode) if ($hash->{SENSORSCONTACT} && $option && $mode ne $option);
@@ -1454,7 +1454,7 @@ sub Set
     if ($delay)
     {
       my $hours = hourMaker(sprintf('%.2f',$delay / 60));
-      CommandDefine(undef,"atTmp_modeAlarm_delayed_arm_$name at +$hours {FHEM::Automation::HOMEMODE::set_modeAlarm(\"$name\",\"$option\",\"$amode\")}");
+      CommandDefine(undef,"atTmp_modeAlarm_delayed_arm_$name at +$hours {FHEM::HOMEMODE::set_modeAlarm(\"$name\",\"$option\",\"$amode\")}");
     }
     else
     {
@@ -1767,7 +1767,7 @@ sub RESIDENTS
     {
       my $delay = AttrNum($name,'HomeResidentCmdDelay',1);
       my $cmd = encode_base64(serializeCMD($hash,@commands),'');
-      InternalTimer(gettimeofday() + $delay,'FHEM::Automation::HOMEMODE::execUserCMDs',"$name|$cmd|$dev");
+      InternalTimer(gettimeofday() + $delay,'FHEM::HOMEMODE::execUserCMDs',"$name|$cmd|$dev");
     }
   }
   return;
@@ -3321,7 +3321,7 @@ sub TriggerState
           if ($delay && !$retrigger && !ReadingsVal($sensor,$marker,0))
           {
             readingsSingleUpdate($defs{$sensor},$marker,1,0);
-            CommandDefine(undef,$timer.' at +'.hourMaker($delay/60)." {fhem \"sleep 0.1 quiet;{FHEM::Automation::HOMEMODE::TriggerState('$name',undef,undef,'$sensor',1)}\"}");
+            CommandDefine(undef,$timer.' at +'.hourMaker($delay/60)." {fhem \"sleep 0.1 quiet;{FHEM::HOMEMODE::TriggerState('$name',undef,undef,'$sensor',1)}\"}");
           }
           else
           {
@@ -3373,10 +3373,8 @@ sub TriggerState
       {
         $delay = returnDelay($amode,@delays);
       }
-      Debug $sensor;
       if ($state =~ /^($val)$/x)
       {
-        Debug 'yes';
         push @motionsOpen,$sensor;
         push @motionsInsideOpen,$sensor if ($kind eq 'inside');
         push @motionsOutsideOpen,$sensor if ($kind eq 'outside');
@@ -3386,7 +3384,7 @@ sub TriggerState
           if ($delay && !$retrigger && !ReadingsVal($sensor,$marker,0))
           {
             readingsSingleUpdate($defs{$sensor},$marker,1,0);
-            CommandDefine(undef,"$timer at +".hourMaker($delay/60)." {fhem \"sleep 0.1 quiet;{FHEM::Automation::HOMEMODE::TriggerState('$name',undef,undef,'$sensor',1)}\"}");
+            CommandDefine(undef,"$timer at +".hourMaker($delay/60)." {fhem \"sleep 0.1 quiet;{FHEM::HOMEMODE::TriggerState('$name',undef,undef,'$sensor',1)}\"}");
           }
           else
           {
@@ -3641,7 +3639,7 @@ sub ContactOpenWarning
     }
     execCMDs($hash,serializeCMD($hash,@commands)) if (@commands);
   }
-  CommandDefine(undef,"$timer at +$waittime {fhem \"sleep 0.1 quiet;{FHEM::Automation::HOMEMODE::ContactOpenWarning('$name','$warn[0]',$retrigger)}\"}") if (!ID($timer) && $retrigger<=$maxtrigger);
+  CommandDefine(undef,"$timer at +$waittime {fhem \"sleep 0.1 quiet;{FHEM::HOMEMODE::ContactOpenWarning('$name','$warn[0]',$retrigger)}\"}") if (!ID($timer) && $retrigger<=$maxtrigger);
   return;
 }
 
@@ -4184,7 +4182,7 @@ sub checkIP
     url        => 'http://icanhazip.com/',
     timeout    => 5,
     hash       => $hash,
-    callback   => \&FHEM::Automation::HOMEMODE::setIP
+    callback   => \&FHEM::HOMEMODE::setIP
   };
   return HttpUtils_NonblockingGet($param);
 }
@@ -4504,8 +4502,8 @@ sub Details
       $html .= '<thead>';
       $html .= '<tr>';
       $html .= '<th><abbr title="'.$deact.'">#</abbr></th>';
-      # $text = $langDE?'Füge neue Batteriesensoren hinzu (kommaseparierte Liste)':'Add new battery sensors (comma separated list)';
-      # $html .= '<th>'.$sensor.' <button class="add" title="'.$text.'">+</button></th>';
+      $text = $langDE?'Füge neue Batteriesensoren hinzu (kommaseparierte Liste)':'Add new battery sensors (comma separated list)';
+      # $html .= '<th>'.$sensor.' <button class="addSensor" title="'.$text.'">+</button></th>';
       $html .= '<th>'.$sensor.'</th>';
       $text = $langDE?'Name des Reading welches den Batteriewert anzeigt':'Name of the reading indicating the battery value';
       $html .= '<th><abbr title="'.$text.'">Home<br>ReadingBattery</abbr></th>';
@@ -4556,8 +4554,6 @@ sub Details
       $html .= '<thead>';
       $html .= '<tr>';
       $html .= '<th><abbr title="'.$deact.'">#</abbr></th>';
-      # $text = $langDE?'Füge neue Kontakte hinzu (kommaseparierte Liste)':'Add new contact sensors (comma separated list)';
-      # $html .= '<th>'.$sensor.' <button class="add" title="'.$text.'">+</button></th>';
       $html .= '<th>'.$sensor.'</th>';
       $text = $langDE?
         'Alarm Modus in denen offen als Alarm zu werten ist':
@@ -4632,7 +4628,7 @@ sub Details
         $html .= ' checked="checked"' if (grep {$_ eq 'armnight'} split /\|/x,AttrVal($s,'HomeModeAlarmActive',''));
         $html .= '>armnight</label>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeAlarmDelay',3,'',AttrNum($s,'HomeAlarmDelay',undef),AttrNum($name,'HomeSensorsAlarmDelay',0)).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeAlarmDelay',10,'',AttrNum($s,'HomeAlarmDelay',undef),AttrNum($name,'HomeSensorsAlarmDelay',0)).'</td>';
         $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeOpenMaxTrigger',2,'',AttrVal($s,'HomeOpenMaxTrigger',''),0).'</td>';
         if (!AttrVal($name,'HomeSensorsContactOpenWarningUnified',0))
         {
@@ -4829,7 +4825,7 @@ sub Details
         $html .= ' checked="checked"' if (grep {$_ eq 'armnight'} @hmaa);
         $html .= '>armnight</label>';
         $html .= '</td>';
-        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeAlarmDelay',3,'',AttrVal($s,'HomeAlarmDelay',''),AttrNum($name,'HomeSensorsAlarmDelay',0)).'</td>';
+        $html .= '<td class="HOMEMODE_tac">'.FW_textfieldv('HomeAlarmDelay',10,'',AttrVal($s,'HomeAlarmDelay',''),AttrNum($name,'HomeSensorsAlarmDelay',0)).'</td>';
         $html .= '<td class="HOMEMODE_tac">'.FW_select("$s",'HomeSensorLocation',\@hml,AttrVal($s,'HomeSensorLocation',''),'dropdown','').'</td>';
         $html .= '<td>'.FW_textfieldv('HomeReadingMotion',10,'',AttrVal($s,'HomeReadingMotion',''),'state');
         my $val = ReadingsVal($s,AttrVal($s,'HomeReadingMotion','state'),undef);
@@ -6976,7 +6972,7 @@ sub inform
     "runtime": {
       "requires": {
         "FHEM": 6.0,
-        "perl": 5.016,
+        "perl": 5.16,
         "Meta": 0,
         "JSON": 0
       },
