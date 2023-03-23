@@ -169,6 +169,10 @@ sub Define
     {
       $attr{$name}{HomeTwilightDevice} = (devspec2array('TYPE=Twilight'))[0];
     }
+    if (int(devspec2array('model=HM-WDS10-TH-O'))==1)
+    {
+      $attr{$name}{HomeSensorTemperatureOutside} = 'HM-WDS10-TH-O';
+    }
     if ($count==1)
     {
       if (devspec2array('model=HM-SEC-SD-2'))
